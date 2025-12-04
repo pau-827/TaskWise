@@ -10,6 +10,8 @@ venv/
 # VS Code settings
 .vscode/
 
+tempCodeRunnerFile.py
+
 # Optional
 *.sqlite3
 *.db
