@@ -1,5 +1,6 @@
 import flet as ft
 from passlib.hash import bcrypt
+import admin
 import db
 
 
@@ -458,6 +459,51 @@ def main(page: ft.Page):
         except Exception as ex:
             show_message(f"Signup failed: {ex}")
 
+    def show_admin():
+        page.clean()
+
+        print("SHOWING ADMIN PAGE NOW")
+
+        logs = db.get_logs()
+
+        log_list = ft.ListView(
+            controls=[
+                ft.Container(
+                    content=ft.Column(
+                        [
+                            ft.Text(f"User ID: {log['user_id']}"),
+                            ft.Text(f"Email: {log['email']}"),
+                            ft.Text(f"Action: {log['action']}"),
+                            ft.Text(f"Details: {log['details']}"),
+                            ft.Text(f"Time: {log['created_at']}"),
+                        ]
+                    ),
+                    bgcolor=FORM_BG,
+                    padding=10,
+                    border_radius=10,
+                )
+                for log in logs
+            ],
+            expand=True,
+            spacing=10
+        )
+
+        page.add(
+            ft.Column(
+                [
+                    ft.Row(
+                        [
+                            ft.Text("Admin Panel", size=22, weight="bold"),
+                            ft.TextButton("Back", on_click=lambda e: show_dashboard()),
+                        ],
+                        alignment="spaceBetween"
+                    ),
+                    ft.Container(log_list, expand=True)
+                ],
+                expand=True
+            )
+        )
+        page.update()
 
     def handle_login(e):
         email = (login_email_field.value or "").strip().lower()
@@ -469,21 +515,31 @@ def main(page: ft.Page):
 
         try:
             user = db.get_user_by_email(email)
+            print("DEBUG USER FOUND:", user)
+            print("DEBUG ROLE:", user["role"])
+
             if not user:
                 show_message("Invalid email or password.")
                 return
 
-            if not bcrypt.verify(pw, user["password_hash"]):
+            if bcrypt.verify(pw, user["password_hash"]):
                 show_message("Invalid email or password.")
                 return
 
-            # Session
             page.session.set("user_id", user["id"])
             page.session.set("user_name", user["name"])
             page.session.set("user_role", user["role"])
+            
+            print(user["role"])
 
-            show_message(f"Welcome, {user['name']}!", color=SUCCESS_GREEN)
-            show_dashboard()
+            # ADMIN REDIRECT (NO SNACKBAR)
+            if not user["role"] == "admin":
+                show_dashboard()
+                return
+            else:
+                # USER REDIRECT (NO SNACKBAR)
+                show_admin()
+                return
 
         except Exception as ex:
             show_message(f"Login failed: {ex}")
