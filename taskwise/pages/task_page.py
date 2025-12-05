@@ -552,51 +552,49 @@ class TaskPage:
         # ---------------------------
         def build_left_panel():
             # pill filter buttons
-            def pill(text):
-                active = getattr(S, "current_filter", "All Tasks") == text
+            def pill(label):
+                active = getattr(S, "current_filter", "All Tasks") == label
 
-                def set_filter(e):
-                    S.current_filter = text
-                    if hasattr(S, "_update_callback") and S._update_callback:
-                        S._update_callback()
-
-                return ft.ElevatedButton(
-                    text,
-                    on_click=set_filter,
+                return ft.Container(
+                    content=ft.Text(label, color=C("TEXT_PRIMARY")),
+                    padding=ft.padding.symmetric(horizontal=18, vertical=8),
+                    border_radius=20,
                     bgcolor=C("BUTTON_COLOR") if active else C("BG_COLOR"),
-                    color=ft.Colors.WHITE if active else C("TEXT_PRIMARY"),
-                    style=ft.ButtonStyle(
-                        shape=ft.RoundedRectangleBorder(radius=12),
-                        side=ft.BorderSide(1, C("BORDER_COLOR")),
-                    ),
-                    height=34,
+                    border=ft.border.all(1, C("BORDER_COLOR")),
+                    on_click=lambda e: set_filter(label),
                 )
 
-            left_panel = ft.Container(
+            def set_filter(label):
+                S.current_filter = label
+                if S._update_callback:
+                    S._update_callback()
+
+            return ft.Container(
                 expand=True,
                 padding=20,
+                border_radius=16,
+                border=ft.border.all(1, C("BORDER_COLOR")),
+                bgcolor=C("FORM_BG"),
                 content=ft.Column(
                     [
-                        ft.Text("Tasks", size=18, weight=ft.FontWeight.BOLD, color=C("TEXT_PRIMARY")),
+                        ft.Text("Tasks", size=20, weight="bold", color=C("TEXT_PRIMARY")),
                         ft.Container(height=10),
                         ft.Row(
                             [pill("All Tasks")] + [pill(c) for c in CATEGORIES],
                             spacing=10,
                             wrap=True,
                         ),
-                        ft.Container(height=12),
+                        ft.Container(height=20),
                         ft.Container(content=create_task_list(), expand=True),
-                        ft.Container(height=10),
+                        ft.Container(height=20),
                         ft.Row(
                             [
-                                ft.Container(expand=True),
                                 ft.FloatingActionButton(
                                     icon=ft.Icons.ADD,
                                     bgcolor=C("BUTTON_COLOR"),
-                                    foreground_color=ft.Colors.WHITE,
-                                    on_click=lambda e: self._show_add_task_dialog()  # defined in Part 4
-                                ),
-                                ft.Container(expand=True),
+                                    foreground_color="white",
+                                    on_click=lambda e: self._show_add_task_dialog(),
+                                )
                             ],
                             alignment=ft.MainAxisAlignment.CENTER,
                         ),
@@ -636,118 +634,70 @@ class TaskPage:
         def create_analytics_panel():
             tasks = db.get_all_tasks()
 
-            # Basic stats
-            total = len(tasks)
-            completed = sum(1 for t in tasks if (t[5] == "completed"))
-            pending = total - completed
+            # Count categories
+            categories = ["Personal", "Work", "Study", "Bills", "Others"]
+            cat_counts = {c: 0 for c in categories}
 
-            # Overdue
-            today = datetime.now().date()
-            overdue = 0
             for t in tasks:
-                status = t[5]
-                due = safe_parse(t[4])
-                if status == "pending" and due and due < today:
-                    overdue += 1
+                cat = (t[3] or "").strip()
+                if cat in cat_counts:
+                    cat_counts[cat] += 1
 
-            # Category breakdown
-            cat_counts = {}
-            for t in tasks:
-                cat = (t[3] or "Uncategorized").strip()
-                cat_counts[cat] = cat_counts.get(cat, 0) + 1
+            # Donut chart values
+            values = list(cat_counts.values())
+            labels = list(cat_counts.keys())
 
-            # Build visual stat boxes
-            def stat_box(title, number, color):
-                return ft.Container(
-                    bgcolor=C("FORM_BG"),
-                    border_radius=12,
-                    border=ft.border.all(1, C("BORDER_COLOR")),
-                    padding=16,
-                    content=ft.Column(
-                        [
-                            ft.Text(title, size=13, weight=ft.FontWeight.BOLD, color=C("TEXT_PRIMARY")),
-                            ft.Text(str(number), size=20, weight=ft.FontWeight.BOLD, color=color),
-                        ],
-                        spacing=6,
-                        horizontal_alignment=ft.CrossAxisAlignment.CENTER,
-                    ),
-                )
-
-            # Build category rows
-            cat_rows = []
-            for cat, count in cat_counts.items():
-                cat_rows.append(
-                    ft.Row(
-                        [
-                            ft.Text(cat, color=C("TEXT_PRIMARY")),
-                            ft.Text(str(count), color=C("TEXT_PRIMARY")),
-                        ],
-                        alignment=ft.MainAxisAlignment.SPACE_BETWEEN,
+            donut = ft.PieChart(
+                sections=[
+                    ft.PieChartSection(
+                        value=values[i] if values[i] > 0 else 1,      # Avoid invisible slices
+                        title=labels[i],
+                        radius=min(page.width, page.height) * 0.06,
+                        title_style=ft.TextStyle(size=12, color="white"),
                     )
-                )
-
-            # Completion bar (simple %)
-            pct = 0
-            if total > 0:
-                pct = int((completed / total) * 100)
-
-            completion_bar = ft.Container(
-                height=12,
-                border_radius=8,
-                bgcolor=C("BG_COLOR"),
-                content=ft.Container(
-                    width=pct * 2,  # adjust bar width (scaled visually)
-                    bgcolor=C("SUCCESS_COLOR"),
-                    border_radius=8,
-                ),
+                    for i in range(len(labels))
+                ],
+                center_space_radius=40,
+                expand=True,
             )
 
-            # Build analytics card container
-            panel = ft.Container(
+            # Count Completed & Overdue
+            completed = sum(1 for t in tasks if t[5] == "completed")
+            today = datetime.now().date()
+            overdue = sum(
+                1 for t in tasks
+                if t[5] == "pending" and helpers["safe_parse"](t[4]) and helpers["safe_parse"](t[4]) < today
+            )
+
+            summary_card = ft.Container(
                 bgcolor=C("FORM_BG"),
-                border_radius=16,
+                padding=18,
+                border_radius=12,
                 border=ft.border.all(1, C("BORDER_COLOR")),
-                padding=20,
-                expand=True,
                 content=ft.Column(
                     [
-                        ft.Text("Analytics", size=18, weight=ft.FontWeight.BOLD, color=C("TEXT_PRIMARY")),
-                        ft.Container(height=12),
-
-                        # Stats row
-                        ft.Row(
-                            [
-                                stat_box("Total Tasks", total, C("TEXT_PRIMARY")),
-                                stat_box("Completed", completed, C("SUCCESS_COLOR")),
-                                stat_box("Pending", pending, C("TEXT_PRIMARY")),
-                                stat_box("Overdue", overdue, C("ERROR_COLOR")),
-                            ],
-                            spacing=14,
-                        ),
-
-                        ft.Container(height=20),
-                        ft.Text("Completion Rate", size=14, weight=ft.FontWeight.BOLD, color=C("TEXT_PRIMARY")),
-                        ft.Container(height=8),
-                        completion_bar,
-                        ft.Container(height=4),
-                        ft.Text(f"{pct}% completed", size=12, color=C("TEXT_SECONDARY")),
-
-                        ft.Container(height=20),
-                        ft.Text("Category Breakdown", size=14, weight=ft.FontWeight.BOLD, color=C("TEXT_PRIMARY")),
-                        ft.Container(height=10),
-                        ft.Container(
-                            bgcolor=C("BG_COLOR"),
-                            border_radius=12,
-                            border=ft.border.all(1, C("BORDER_COLOR")),
-                            padding=16,
-                            content=ft.Column(cat_rows, spacing=4),
-                        ),
+                        ft.Text(f"{completed} tasks completed", weight="bold", size=14),
+                        ft.Text(f"• {overdue} tasks overdue", size=11, color=C("TEXT_SECONDARY")),
                     ],
-                    spacing=0,
-                ),
+                    spacing=4,
+                )
             )
 
-            return panel
+            return ft.Column(
+                [
+                    ft.Container(
+                        bgcolor=C("FORM_BG"),
+                        padding=20,
+                        border_radius=16,
+                        border=ft.border.all(1, C("BORDER_COLOR")),
+                        content=donut,
+                        expand=True,
+                    ),
+                    ft.Container(height=20),
+                    summary_card
+                ],
+                expand=True
+            )
 
         # ------------------------------------------------------------
         # RIGHT PANEL WRAPPER
@@ -775,7 +725,7 @@ class TaskPage:
             body = ft.Row(
                 [
                     ft.Container(content=left_panel, expand=6),
-                    ft.Container(width=24),
+                    ft.VerticalDivider(width=1, color=C("BORDER_COLOR")),
                     ft.Container(content=right_panel, expand=4),
                 ],
                 expand=True,

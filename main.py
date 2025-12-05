@@ -362,7 +362,7 @@ def main(page: ft.Page):
                                     ),
                                     ft.Container(
                                         content=ft.Text(
-                                            "Learn More",
+                                            "Contact Admin",
                                             size=16,
                                             weight=ft.FontWeight.BOLD,
                                             color=PRIMARY_TEXT,
