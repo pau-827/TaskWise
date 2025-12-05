@@ -10,6 +10,7 @@ venv/
 # VS Code settings
 .vscode/
 
+# Temporary files created by VS Code Code Runner
 tempCodeRunnerFile.py
 
 # Optional

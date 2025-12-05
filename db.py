@@ -198,6 +198,11 @@ def get_tasks_by_user(user_id: int) -> List[Dict[str, Any]]:
     conn.close()
     return [dict(r) for r in rows]
 
+def update_user_password(email: str, new_hash: str):
+    conn = _get_conn()
+    conn.execute("UPDATE users SET password_hash=? WHERE email=?", (new_hash, email))
+    conn.commit()
+    conn.close()
 
 def update_task(
     user_id: int,
