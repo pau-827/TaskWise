@@ -1,4 +1,3 @@
-# taskwise/pages/task_page.py
 import flet as ft
 from datetime import datetime, date
 from typing import Optional, List
@@ -20,6 +19,7 @@ class TaskPage:
 
     def __init__(self, state):
         self.state = state
+        self.search_query = ""  # local UI state for searching
 
     def view(self, page: ft.Page) -> ft.Control:
         S = self.state
@@ -50,7 +50,7 @@ class TaskPage:
             page.overlay.append(due_date_picker)
 
         # ---------------------------
-        # Navigation helpers (connect to Calendar + Settings)
+        # Navigation helpers
         # ---------------------------
         def go_calendar_for_due(due_str: Optional[str]):
             dd = safe_parse_date(due_str)
@@ -81,33 +81,28 @@ class TaskPage:
         # ---------------------------
         # UI helpers
         # ---------------------------
-        def badge(text: str) -> ft.Control:
+        def chip(text: str, active: bool, on_click):
             return ft.Container(
-                padding=ft.padding.symmetric(horizontal=10, vertical=6),
-                bgcolor=C("BUTTON_COLOR"),
+                padding=ft.padding.symmetric(horizontal=14, vertical=8),
                 border_radius=999,
-                content=ft.Text(text, size=11, color=ft.Colors.WHITE),
-            )
-
-        def pill_button(label: str) -> ft.Control:
-            active = (S.current_filter == label)
-
-            def set_filter(e):
-                S.current_filter = label
-                S.update()
-
-            return ft.Container(
-                on_click=set_filter,
-                padding=ft.padding.symmetric(horizontal=16, vertical=8),
-                border_radius=999,
-                bgcolor=C("BUTTON_COLOR") if active else C("BG_COLOR"),
+                bgcolor=C("BUTTON_COLOR") if active else "white",
                 border=ft.border.all(1, C("BORDER_COLOR")),
+                ink=True,
+                on_click=on_click,
                 content=ft.Text(
-                    label,
+                    text,
                     size=12,
                     color=ft.Colors.WHITE if active else C("TEXT_PRIMARY"),
-                    weight=ft.FontWeight.BOLD if active else ft.FontWeight.NORMAL,
+                    weight=ft.FontWeight.BOLD if active else ft.FontWeight.W_600,
                 ),
+            )
+
+        def small_tag(text: str, bgcolor: str, fg: str = "white"):
+            return ft.Container(
+                padding=ft.padding.symmetric(horizontal=10, vertical=6),
+                border_radius=999,
+                bgcolor=bgcolor,
+                content=ft.Text(text, size=11, color=fg, weight=ft.FontWeight.W_600),
             )
 
         def category_dropdown(selected_value: Optional[str] = None) -> ft.Dropdown:
@@ -170,8 +165,6 @@ class TaskPage:
                     picked = due_date_picker.value
                     if picked:
                         due_tf.value = fmt_date(picked)
-
-                        # CONNECT TO CALENDAR PAGE (shared state)
                         S.selected_date = picked
                         S.cal_year = picked.year
                         S.cal_month = picked.month
@@ -217,7 +210,7 @@ class TaskPage:
                 bgcolor=C("FORM_BG"),
                 title=ft.Text("Add Task", size=18, weight=ft.FontWeight.BOLD, color=C("TEXT_PRIMARY")),
                 content=ft.Container(
-                    width=460,
+                    width=480,
                     content=ft.Column(
                         [
                             title_tf,
@@ -298,8 +291,6 @@ class TaskPage:
                     picked = due_date_picker.value
                     if picked:
                         due_tf.value = fmt_date(picked)
-
-                        # CONNECT TO CALENDAR PAGE (shared state)
                         S.selected_date = picked
                         S.cal_year = picked.year
                         S.cal_month = picked.month
@@ -345,7 +336,7 @@ class TaskPage:
                 bgcolor=C("FORM_BG"),
                 title=ft.Text("Edit Task", size=18, weight=ft.FontWeight.BOLD, color=C("TEXT_PRIMARY")),
                 content=ft.Container(
-                    width=460,
+                    width=480,
                     content=ft.Column(
                         [
                             title_tf,
@@ -369,7 +360,12 @@ class TaskPage:
                 ),
                 actions=[
                     ft.TextButton("Cancel", on_click=close),
-                    ft.ElevatedButton("Save Changes", on_click=save_changes, bgcolor=C("BUTTON_COLOR"), color=ft.Colors.WHITE),
+                    ft.ElevatedButton(
+                        "Save Changes",
+                        on_click=save_changes,
+                        bgcolor=C("BUTTON_COLOR"),
+                        color=ft.Colors.WHITE,
+                    ),
                 ],
                 actions_alignment=ft.MainAxisAlignment.END,
                 shape=ft.RoundedRectangleBorder(radius=16),
@@ -384,10 +380,20 @@ class TaskPage:
         # ---------------------------
         def get_filtered_tasks() -> List[tuple]:
             tasks = db.get_all_tasks()
+
             current_filter = getattr(S, "current_filter", "All Tasks")
             if current_filter != "All Tasks":
                 wanted = current_filter.lower().strip()
                 tasks = [t for t in tasks if (t[3] or "").strip().lower() == wanted]
+
+            q = (self.search_query or "").strip().lower()
+            if q:
+                def ok(t):
+                    title = (t[1] or "").lower()
+                    desc = (t[2] or "").lower()
+                    return q in title or q in desc
+                tasks = [t for t in tasks if ok(t)]
+
             return tasks
 
         def is_overdue(due_date_str: Optional[str], status: str) -> bool:
@@ -398,12 +404,14 @@ class TaskPage:
 
         def build_task_card(t: tuple) -> ft.Control:
             task_id, title, desc, category, due_date, status, created_at = t
-
             overdue = is_overdue(due_date, status)
-            bg = C("FORM_BG") if not overdue else ft.Colors.with_opacity(0.10, ft.Colors.RED)
 
-            due_label = f"Due: {due_date}" if (due_date or "").strip() else "No due date"
-            cat_label = (category or "").strip() or "No category"
+            base_bg = "white"
+            highlight = ft.Colors.with_opacity(0.08, ft.Colors.RED) if overdue else ft.Colors.with_opacity(0.06, ft.Colors.BLACK)
+            bg = highlight
+
+            due_label = f"Due {due_date}" if (due_date or "").strip() else "No Due Date"
+            cat_label = (category or "").strip() or "No Category"
 
             def toggle(e):
                 new_status = "completed" if status == "pending" else "pending"
@@ -419,39 +427,55 @@ class TaskPage:
             def edit(e):
                 show_edit_task_dialog(t)
 
-            return ft.Container(
-                bgcolor=bg,
+            title_style = ft.TextStyle(
+                size=14,
+                weight=ft.FontWeight.BOLD,
+                color=C("TEXT_PRIMARY") if status == "pending" else C("TEXT_SECONDARY"),
+                decoration=ft.TextDecoration.LINE_THROUGH if status == "completed" else None,
+            )
+
+            status_tag = small_tag(
+                "Completed" if status == "completed" else "Pending",
+                bgcolor=C("SUCCESS_COLOR") if status == "completed" else C("BUTTON_COLOR"),
+            )
+
+            due_tag = small_tag(
+                due_label,
+                bgcolor=C("ERROR_COLOR") if overdue else C("BORDER_COLOR"),
+                fg="white" if overdue else C("TEXT_PRIMARY"),
+            )
+
+            cat_tag = small_tag(cat_label, bgcolor=C("TEXT_PRIMARY"))
+
+            card = ft.Container(
+                bgcolor=base_bg,
                 border_radius=14,
                 border=ft.border.all(1, C("BORDER_COLOR")),
                 padding=ft.padding.symmetric(horizontal=14, vertical=12),
+                shadow=ft.BoxShadow(blur_radius=10, color="#00000010", offset=ft.Offset(0, 6)),
                 content=ft.Row(
-                    [
+                    vertical_alignment=ft.CrossAxisAlignment.CENTER,
+                    controls=[
                         ft.Checkbox(value=(status == "completed"), on_change=toggle),
-                        ft.Column(
-                            [
-                                ft.Text(
-                                    title,
-                                    size=14,
-                                    weight=ft.FontWeight.BOLD,
-                                    color=C("TEXT_PRIMARY") if status == "pending" else C("TEXT_SECONDARY"),
-                                ),
-                                ft.Text(
-                                    (desc or "No description").strip() or "No description",
-                                    size=11,
-                                    color=C("TEXT_SECONDARY"),
-                                    max_lines=1,
-                                    overflow=ft.TextOverflow.ELLIPSIS,
-                                ),
-                                ft.Row(
-                                    [
-                                        ft.Text(due_label, size=11, color=C("TEXT_SECONDARY")),
-                                        ft.Text(f"Category: {cat_label}", size=11, color=C("TEXT_SECONDARY")),
-                                    ],
-                                    spacing=14,
-                                ),
-                            ],
-                            spacing=4,
+                        ft.Container(
                             expand=True,
+                            content=ft.Column(
+                                spacing=6,
+                                controls=[
+                                    ft.Text(title, style=title_style),
+                                    ft.Text(
+                                        (desc or "No description").strip() or "No description",
+                                        size=11,
+                                        color=C("TEXT_SECONDARY"),
+                                        max_lines=1,
+                                        overflow=ft.TextOverflow.ELLIPSIS,
+                                    ),
+                                    ft.Row(
+                                        spacing=8,
+                                        controls=[cat_tag, due_tag, status_tag],
+                                    ),
+                                ],
+                            ),
                         ),
                         ft.PopupMenuButton(
                             icon=ft.Icons.MORE_HORIZ,
@@ -463,10 +487,18 @@ class TaskPage:
                             ],
                         ),
                     ],
-                    alignment=ft.MainAxisAlignment.SPACE_BETWEEN,
-                    vertical_alignment=ft.CrossAxisAlignment.CENTER,
                 ),
             )
+
+            def on_hover(e: ft.HoverEvent):
+                if e.data == "true":
+                    card.shadow = ft.BoxShadow(blur_radius=18, color="#00000018", offset=ft.Offset(0, 10))
+                else:
+                    card.shadow = ft.BoxShadow(blur_radius=10, color="#00000010", offset=ft.Offset(0, 6))
+                page.update()
+
+            card.on_hover = on_hover
+            return card
 
         def build_task_list() -> ft.Control:
             tasks = get_filtered_tasks()
@@ -474,14 +506,22 @@ class TaskPage:
                 return ft.Container(
                     alignment=ft.alignment.center,
                     padding=20,
-                    content=ft.Text("No tasks found in this category.", size=13, color=C("TEXT_SECONDARY")),
+                    content=ft.Column(
+                        horizontal_alignment=ft.CrossAxisAlignment.CENTER,
+                        spacing=8,
+                        controls=[
+                            ft.Icon(ft.Icons.INBOX_OUTLINED, size=44, color=C("TEXT_SECONDARY")),
+                            ft.Text("No tasks found in this category.", size=13, color=C("TEXT_SECONDARY")),
+                            ft.Text("Add one using the + button below.", size=12, color=C("TEXT_SECONDARY")),
+                        ],
+                    ),
                 )
 
-            return ft.Column(
-                [build_task_card(t) for t in tasks],
-                spacing=10,
+            # ListView performs better than a scrollable Column
+            return ft.ListView(
                 expand=True,
-                scroll=ft.ScrollMode.AUTO,
+                spacing=10,
+                controls=[build_task_card(t) for t in tasks],
             )
 
         def build_analytics_panel() -> ft.Control:
@@ -494,8 +534,11 @@ class TaskPage:
                 for t in tasks
                 if t[5] == "pending" and safe_parse_date(t[4]) and safe_parse_date(t[4]) < today
             )
+            pending = total - completed
 
-            # category counts
+            progress = 0 if total == 0 else completed / total
+
+            # Category counts for donut (shows distribution even when empty)
             cat_counts = {c: 0 for c in CATEGORIES}
             for t in tasks:
                 c = (t[3] or "").strip()
@@ -504,129 +547,229 @@ class TaskPage:
 
             pie_sections = []
             for label, val in cat_counts.items():
-                # keep visible slices; still represents distribution
                 pie_sections.append(
                     ft.PieChartSection(
                         value=val if val > 0 else 1,
                         title=label,
-                        radius=60,
-                        title_style=ft.TextStyle(size=11, color=ft.Colors.WHITE),
+                        radius=62,
+                        title_style=ft.TextStyle(size=11, color=ft.Colors.WHITE, weight=ft.FontWeight.BOLD),
                     )
                 )
 
             donut = ft.PieChart(
                 sections=pie_sections,
-                center_space_radius=42,
+                center_space_radius=44,
                 expand=True,
+            )
+
+            stat_card = lambda title, value, icon, color: ft.Container(
+                padding=12,
+                border_radius=14,
+                bgcolor="white",
+                border=ft.border.all(1, C("BORDER_COLOR")),
+                content=ft.Row(
+                    spacing=10,
+                    controls=[
+                        ft.Container(
+                            width=36,
+                            height=36,
+                            border_radius=10,
+                            bgcolor=color,
+                            alignment=ft.alignment.center,
+                            content=ft.Icon(icon, size=18, color="white"),
+                        ),
+                        ft.Column(
+                            spacing=2,
+                            controls=[
+                                ft.Text(title, size=11, color=C("TEXT_SECONDARY")),
+                                ft.Text(str(value), size=16, weight=ft.FontWeight.BOLD, color=C("TEXT_PRIMARY")),
+                            ],
+                        ),
+                    ],
+                ),
             )
 
             summary = ft.Container(
                 bgcolor=C("FORM_BG"),
-                border_radius=14,
+                border_radius=16,
                 border=ft.border.all(1, C("BORDER_COLOR")),
                 padding=16,
                 content=ft.Column(
-                    [
-                        ft.Text("Summary", size=16, weight=ft.FontWeight.BOLD, color=C("TEXT_PRIMARY")),
-                        ft.Container(height=8),
-                        ft.Text(f"Total Tasks: {total}", size=12, color=C("TEXT_PRIMARY")),
-                        ft.Text(f"Completed: {completed}", size=12, color=C("TEXT_PRIMARY")),
-                        ft.Text(f"Overdue: {overdue}", size=12, color=C("TEXT_PRIMARY")),
-                        ft.Container(height=10),
+                    spacing=10,
+                    controls=[
                         ft.Row(
-                            [
+                            alignment=ft.MainAxisAlignment.SPACE_BETWEEN,
+                            controls=[
+                                ft.Text("Progress", size=16, weight=ft.FontWeight.BOLD, color=C("TEXT_PRIMARY")),
+                                ft.Text(f"{int(progress*100)}%", size=12, color=C("TEXT_SECONDARY")),
+                            ],
+                        ),
+                        ft.ProgressBar(value=progress, bgcolor="#DDEFEF", color=C("BUTTON_COLOR")),
+                        ft.Row(
+                            spacing=10,
+                            controls=[
+                                ft.Container(expand=True, content=stat_card("Total", total, ft.Icons.LIST_ALT, C("TEXT_PRIMARY"))),
+                                ft.Container(expand=True, content=stat_card("Pending", pending, ft.Icons.SCHEDULE, C("BUTTON_COLOR"))),
+                            ],
+                        ),
+                        ft.Row(
+                            spacing=10,
+                            controls=[
+                                ft.Container(expand=True, content=stat_card("Completed", completed, ft.Icons.CHECK_CIRCLE, C("SUCCESS_COLOR"))),
+                                ft.Container(expand=True, content=stat_card("Overdue", overdue, ft.Icons.ERROR_OUTLINE, C("ERROR_COLOR"))),
+                            ],
+                        ),
+                        ft.Row(
+                            spacing=10,
+                            controls=[
                                 ft.ElevatedButton(
                                     "Open Calendar",
                                     on_click=lambda e: go_calendar_today(),
                                     bgcolor=C("BUTTON_COLOR"),
                                     color=ft.Colors.WHITE,
+                                    expand=True,
                                 ),
                                 ft.ElevatedButton(
                                     "Open Settings",
                                     on_click=lambda e: go_settings(),
                                     bgcolor=C("BUTTON_COLOR"),
                                     color=ft.Colors.WHITE,
+                                    expand=True,
                                 ),
                             ],
-                            spacing=10,
                         ),
                     ],
-                    spacing=4,
+                ),
+            )
+
+            donut_card = ft.Container(
+                expand=True,
+                bgcolor=C("FORM_BG"),
+                border_radius=16,
+                border=ft.border.all(1, C("BORDER_COLOR")),
+                padding=16,
+                content=ft.Column(
+                    spacing=10,
+                    controls=[
+                        ft.Text("Category Mix", size=16, weight=ft.FontWeight.BOLD, color=C("TEXT_PRIMARY")),
+                        ft.Container(expand=True, content=donut),
+                    ],
                 ),
             )
 
             return ft.Column(
-                [
-                    ft.Container(
-                        expand=True,
-                        bgcolor=C("FORM_BG"),
-                        border_radius=14,
-                        border=ft.border.all(1, C("BORDER_COLOR")),
-                        padding=16,
-                        content=donut,
-                    ),
-                    ft.Container(height=14),
+                expand=True,
+                spacing=14,
+                controls=[
+                    donut_card,
                     summary,
                 ],
-                expand=True,
             )
 
         # ---------------------------
-        # Build full page layout (no header here; app.py owns the header)
+        # Filter toolbar + search
         # ---------------------------
-        left_panel = ft.Container(
-            expand=True,
-            bgcolor=C("FORM_BG"),
-            border_radius=18,
-            border=ft.border.all(1, C("BORDER_COLOR")),
-            padding=20,
-            content=ft.Column(
-                [
-                    ft.Row(
-                        [
-                            ft.Text("Tasks", size=20, weight=ft.FontWeight.BOLD, color=C("TEXT_PRIMARY")),
-                            ft.Container(expand=True),
-                            ft.IconButton(
-                                icon=ft.Icons.CALENDAR_MONTH,
-                                icon_color=C("TEXT_PRIMARY"),
-                                tooltip="Open Calendar",
-                                on_click=lambda e: go_calendar_today(),
-                            ),
-                            ft.IconButton(
-                                icon=ft.Icons.SETTINGS,
-                                icon_color=C("TEXT_PRIMARY"),
-                                tooltip="Open Settings",
-                                on_click=lambda e: go_settings(),
-                            ),
-                        ],
-                        alignment=ft.MainAxisAlignment.SPACE_BETWEEN,
-                        vertical_alignment=ft.CrossAxisAlignment.CENTER,
+        def build_filter_bar() -> ft.Control:
+            def set_filter(label: str):
+                def f(e):
+                    S.current_filter = label
+                    S.update()
+                return f
+
+            current = getattr(S, "current_filter", "All Tasks")
+            chips = [chip("All Tasks", current == "All Tasks", set_filter("All Tasks"))]
+            for c in CATEGORIES:
+                chips.append(chip(c, current == c, set_filter(c)))
+
+            # Horizontal scroll chips: ListView(horizontal=True)
+            return ft.Container(
+                height=48,
+                content=ft.ListView(
+                    horizontal=True,
+                    spacing=10,
+                    controls=chips,
+                ),
+            )
+
+        def build_search_row() -> ft.Control:
+            search_tf = ft.TextField(
+                hint_text="Search tasks...",
+                prefix_icon=ft.Icons.SEARCH,
+                bgcolor="white",
+                filled=True,
+                border_radius=14,
+                border_color=C("BORDER_COLOR"),
+                color=C("TEXT_PRIMARY"),
+                content_padding=ft.padding.symmetric(horizontal=12, vertical=10),
+                on_change=lambda e: self._set_search(e, S),
+            )
+
+            return ft.Row(
+                spacing=10,
+                controls=[
+                    ft.Container(expand=True, content=search_tf),
+                    ft.IconButton(
+                        icon=ft.Icons.CALENDAR_MONTH,
+                        icon_color=C("TEXT_PRIMARY"),
+                        tooltip="Open Calendar",
+                        on_click=lambda e: go_calendar_today(),
                     ),
-                    ft.Container(height=12),
-                    ft.Row(
-                        [pill_button("All Tasks")] + [pill_button(x) for x in CATEGORIES],
-                        spacing=10,
-                        wrap=True,
-                    ),
-                    ft.Container(height=16),
-                    ft.Container(expand=True, content=build_task_list()),
-                    ft.Container(height=16),
-                    ft.Row(
-                        [
-                            ft.FloatingActionButton(
-                                icon=ft.Icons.ADD,
-                                bgcolor=C("BUTTON_COLOR"),
-                                foreground_color=ft.Colors.WHITE,
-                                on_click=lambda e: show_add_task_dialog(),
-                            )
-                        ],
-                        alignment=ft.MainAxisAlignment.CENTER,
+                    ft.IconButton(
+                        icon=ft.Icons.SETTINGS,
+                        icon_color=C("TEXT_PRIMARY"),
+                        tooltip="Open Settings",
+                        on_click=lambda e: go_settings(),
                     ),
                 ],
+            )
+
+        # helper: search update
+        # (kept separate so it stays clean)
+        # ---------------------------
+        def build_left_panel() -> ft.Control:
+            return ft.Container(
                 expand=True,
-                spacing=0,
-            ),
-        )
+                bgcolor=C("FORM_BG"),
+                border_radius=18,
+                border=ft.border.all(1, C("BORDER_COLOR")),
+                padding=20,
+                content=ft.Column(
+                    expand=True,
+                    spacing=12,
+                    controls=[
+                        ft.Row(
+                            alignment=ft.MainAxisAlignment.SPACE_BETWEEN,
+                            controls=[
+                                ft.Text("Tasks", size=20, weight=ft.FontWeight.BOLD, color=C("TEXT_PRIMARY")),
+                                small_tag(getattr(S, "current_filter", "All Tasks"), bgcolor=C("TEXT_PRIMARY")),
+                            ],
+                        ),
+                        build_search_row(),
+                        build_filter_bar(),
+                        ft.Container(
+                            expand=True,
+                            padding=ft.padding.only(top=6),
+                            content=build_task_list(),
+                        ),
+                        ft.Row(
+                            alignment=ft.MainAxisAlignment.CENTER,
+                            controls=[
+                                ft.FloatingActionButton(
+                                    icon=ft.Icons.ADD,
+                                    bgcolor=C("BUTTON_COLOR"),
+                                    foreground_color=ft.Colors.WHITE,
+                                    on_click=lambda e: show_add_task_dialog(),
+                                )
+                            ],
+                        ),
+                    ],
+                ),
+            )
+
+        # ---------------------------
+        # Layout
+        # ---------------------------
+        left_panel = build_left_panel()
 
         right_panel = ft.Container(
             expand=True,
@@ -635,7 +778,6 @@ class TaskPage:
             content=build_analytics_panel(),
         )
 
-        # Main board centered and maximized
         board = ft.Container(
             expand=True,
             bgcolor=C("BG_COLOR"),
@@ -643,21 +785,20 @@ class TaskPage:
             border=ft.border.all(1, C("BORDER_COLOR")),
             padding=16,
             content=ft.Row(
-                [
-                    ft.Container(content=left_panel, expand=6),
-                    ft.Container(width=18),
-                    ft.Container(
-                        width=1,
-                        bgcolor=C("BORDER_COLOR"),
-                        margin=ft.margin.symmetric(vertical=10),
-                    ),
-                    ft.Container(width=18),
-                    ft.Container(content=right_panel, expand=4),
-                ],
                 expand=True,
-                alignment=ft.MainAxisAlignment.CENTER,
                 vertical_alignment=ft.CrossAxisAlignment.STRETCH,
+                controls=[
+                    ft.Container(expand=6, content=left_panel),
+                    ft.Container(width=16),
+                    ft.Container(width=1, bgcolor=C("BORDER_COLOR"), margin=ft.margin.symmetric(vertical=10)),
+                    ft.Container(width=16),
+                    ft.Container(expand=4, content=right_panel),
+                ],
             ),
         )
 
         return board
+
+    def _set_search(self, e, S):
+        self.search_query = e.control.value or ""
+        S.update()

@@ -1,15 +1,16 @@
 import flet as ft
 from taskwise.theme import THEMES
 
+
 class SettingsPage:
     """
-    SETTINGS PAGE (wireframe-matched)
-    - IMPORTANT: No header here. app.py already renders the header.
-    - Layout: centered big board -> inner card -> list tiles
-    - Theme dropdown: Light Mode / Dark Mode / Pink (uses your THEMES via AppState.set_theme)
-    - Account row shows signed-in user (if any)
-    - Change Password + Logout use TaskPage's shared auth dialogs if you exposed hashing in state.
-      If your Database already has change_password(), it will work.
+    SETTINGS PAGE (more engaging, still wireframe-friendly)
+    - No header here. app.py owns the header.
+    - Uses AppState:
+        S.colors, S.theme_name, S.set_theme(...)
+        S.user (dict with name/email) or None
+        S.db.get_user_by_email(...)
+        S.db.change_password(...)
     """
 
     def __init__(self, state):
@@ -22,33 +23,31 @@ class SettingsPage:
         def C(k: str) -> str:
             return S.colors.get(k, "#000000")
 
-        # -----------------------------
-        # Helpers
-        # -----------------------------
         def refresh():
             S.update()
 
         # -----------------------------
-        # Dialogs
+        # Dialog helpers
         # -----------------------------
+        def close_dialog(dlg):
+            dlg.open = False
+            page.update()
+
         def show_account_dialog():
             name = S.user.get("name") if S.user else ""
             email = S.user.get("email") if S.user else ""
 
-            content = ft.Column(
-                [
-                    ft.Text("Not signed in.", color=C("TEXT_SECONDARY"))
-                    if not S.user
-                    else ft.Column(
-                        [
-                            ft.Text(f"Name: {name}", color=C("TEXT_PRIMARY")),
-                            ft.Text(f"Email: {email}", color=C("TEXT_SECONDARY")),
-                        ],
-                        spacing=6,
-                    ),
-                ],
-                tight=True,
-                spacing=10,
+            content = (
+                ft.Text("Not signed in.", color=C("TEXT_SECONDARY"))
+                if not S.user
+                else ft.Column(
+                    [
+                        ft.Text(f"Name: {name}", color=C("TEXT_PRIMARY")),
+                        ft.Text(f"Email: {email}", color=C("TEXT_SECONDARY")),
+                    ],
+                    spacing=6,
+                    tight=True,
+                )
             )
 
             dlg = ft.AlertDialog(
@@ -64,12 +63,7 @@ class SettingsPage:
             dlg.open = True
             page.update()
 
-        def close_dialog(dlg):
-            dlg.open = False
-            page.update()
-
         def hash_pw(s: str) -> str:
-            # uses TaskPage-provided hash wrapper if available
             if hasattr(S, "_hash_pw"):
                 return S._hash_pw(s)
             import hashlib
@@ -80,7 +74,7 @@ class SettingsPage:
                 hint_text="Current Password",
                 password=True,
                 can_reveal_password=True,
-                bgcolor=C("BG_COLOR"),
+                bgcolor="white",
                 filled=True,
                 border_color=C("BORDER_COLOR"),
                 border_radius=12,
@@ -90,7 +84,7 @@ class SettingsPage:
                 hint_text="New Password",
                 password=True,
                 can_reveal_password=True,
-                bgcolor=C("BG_COLOR"),
+                bgcolor="white",
                 filled=True,
                 border_color=C("BORDER_COLOR"),
                 border_radius=12,
@@ -100,7 +94,7 @@ class SettingsPage:
                 hint_text="Confirm Password",
                 password=True,
                 can_reveal_password=True,
-                bgcolor=C("BG_COLOR"),
+                bgcolor="white",
                 filled=True,
                 border_color=C("BORDER_COLOR"),
                 border_radius=12,
@@ -176,26 +170,51 @@ class SettingsPage:
         # -----------------------------
         # UI building blocks
         # -----------------------------
-        def tile(text_left: str, right_control: ft.Control | None = None, on_click=None):
+        def soft_shadow():
+            return ft.BoxShadow(blur_radius=14, color="#00000014", offset=ft.Offset(0, 8))
+
+        def section_title(text: str):
+            return ft.Text(text, size=13, weight=ft.FontWeight.BOLD, color=C("TEXT_PRIMARY"))
+
+        def tile(icon, title: str, subtitle: str = "", right_control: ft.Control | None = None, on_click=None):
             return ft.Container(
-                height=52,
-                border_radius=14,
+                border_radius=16,
                 border=ft.border.all(1.5, C("BORDER_COLOR")),
-                bgcolor=C("BG_COLOR"),
-                padding=ft.padding.symmetric(horizontal=16, vertical=10),
+                bgcolor="white",
+                padding=ft.padding.symmetric(horizontal=16, vertical=14),
                 ink=True,
                 on_click=on_click,
                 content=ft.Row(
-                    [
-                        ft.Text(text_left, size=14, weight=ft.FontWeight.BOLD, color=C("TEXT_PRIMARY")),
-                        right_control if right_control else ft.Icon(ft.Icons.CHEVRON_RIGHT, color=C("TEXT_SECONDARY")),
-                    ],
                     alignment=ft.MainAxisAlignment.SPACE_BETWEEN,
                     vertical_alignment=ft.CrossAxisAlignment.CENTER,
+                    controls=[
+                        ft.Row(
+                            spacing=12,
+                            vertical_alignment=ft.CrossAxisAlignment.CENTER,
+                            controls=[
+                                ft.Container(
+                                    width=40,
+                                    height=40,
+                                    border_radius=12,
+                                    bgcolor=ft.Colors.with_opacity(0.12, C("BUTTON_COLOR")),
+                                    alignment=ft.alignment.center,
+                                    content=ft.Icon(icon, color=C("BUTTON_COLOR")),
+                                ),
+                                ft.Column(
+                                    spacing=2,
+                                    controls=[
+                                        ft.Text(title, size=14, weight=ft.FontWeight.BOLD, color=C("TEXT_PRIMARY")),
+                                        ft.Text(subtitle, size=11, color=C("TEXT_SECONDARY")) if subtitle else ft.Container(),
+                                    ],
+                                ),
+                            ],
+                        ),
+                        right_control if right_control else ft.Icon(ft.Icons.CHEVRON_RIGHT, color=C("TEXT_SECONDARY")),
+                    ],
                 ),
             )
 
-        # Theme dropdown (wireframe-like)
+        # Theme dropdown
         theme_dd = ft.Dropdown(
             value=S.theme_name if S.theme_name else "Light Mode",
             options=[
@@ -205,64 +224,190 @@ class SettingsPage:
             ],
             border=ft.InputBorder.NONE,
             filled=False,
-            width=160,
+            width=170,
             text_size=12,
             content_padding=ft.padding.symmetric(horizontal=10, vertical=0),
             on_change=lambda e: (S.set_theme(theme_dd.value), refresh()),
         )
 
-        # -----------------------------
-        # Center board layout (maximized like wireframe)
-        # -----------------------------
-        inner_card = ft.Container(
-            width=520,
-            border_radius=18,
-            border=ft.border.all(2, C("BORDER_COLOR")),
-            bgcolor=C("FORM_BG"),
-            padding=22,
-            content=ft.Column(
-                [
-                    ft.Text("Settings", size=20, weight=ft.FontWeight.BOLD, color=C("TEXT_PRIMARY")),
-                    ft.Container(height=10),
+        # Profile header
+        user_name = (S.user.get("name") if S.user else "Guest").strip() if S.user else "Guest"
+        user_email = (S.user.get("email") if S.user else "Not signed in").strip() if S.user else "Not signed in"
+        status_text = "Signed in" if S.user else "Signed out"
 
-                    # Inner list box
-                    ft.Container(
-                        border_radius=16,
-                        border=ft.border.all(2, C("BORDER_COLOR")),
-                        bgcolor=C("BG_COLOR"),
-                        padding=16,
-                        content=ft.Column(
-                            [
-                                tile("Theme", right_control=theme_dd),
-                                ft.Container(height=12),
-                                tile("Account", on_click=lambda e: show_account_dialog()),
-                                ft.Container(height=12),
-                                tile("Change Password", on_click=lambda e: show_change_password_dialog()),
-                                ft.Container(height=12),
-                                tile("Logout", on_click=lambda e: do_logout()),
-                            ],
-                            spacing=0,
-                        ),
+        profile_card = ft.Container(
+            border_radius=20,
+            bgcolor="white",
+            border=ft.border.all(1.5, C("BORDER_COLOR")),
+            padding=18,
+            shadow=soft_shadow(),
+            content=ft.Row(
+                spacing=14,
+                vertical_alignment=ft.CrossAxisAlignment.CENTER,
+                controls=[
+                    ft.CircleAvatar(
+                        radius=26,
+                        bgcolor=C("BUTTON_COLOR"),
+                        content=ft.Text(user_name[:1].upper(), color="white", weight=ft.FontWeight.BOLD),
+                    ),
+                    ft.Column(
+                        expand=True,
+                        spacing=4,
+                        controls=[
+                            ft.Text(user_name, size=16, weight=ft.FontWeight.BOLD, color=C("TEXT_PRIMARY")),
+                            ft.Text(user_email, size=11, color=C("TEXT_SECONDARY")),
+                            ft.Row(
+                                spacing=8,
+                                controls=[
+                                    ft.Container(
+                                        padding=ft.padding.symmetric(horizontal=10, vertical=5),
+                                        border_radius=999,
+                                        bgcolor=ft.Colors.with_opacity(0.12, C("SUCCESS_COLOR") if S.user else C("ERROR_COLOR")),
+                                        content=ft.Text(status_text, size=11, color=C("TEXT_PRIMARY")),
+                                    ),
+                                ],
+                            ),
+                        ],
+                    ),
+                    ft.IconButton(
+                        icon=ft.Icons.ACCOUNT_CIRCLE,
+                        icon_color=C("TEXT_PRIMARY"),
+                        tooltip="Account details",
+                        on_click=lambda e: show_account_dialog(),
                     ),
                 ],
-                spacing=0,
             ),
         )
 
+        # Left column (settings controls)
+        settings_stack = ft.Column(
+            spacing=14,
+            controls=[
+                section_title("Preferences"),
+                tile(ft.Icons.PALETTE, "Theme", "Switch your look and feel", right_control=theme_dd),
+                section_title("Account"),
+                tile(ft.Icons.PERSON, "Account", "View profile information", on_click=lambda e: show_account_dialog()),
+                tile(ft.Icons.LOCK, "Change Password", "Update your login password", on_click=lambda e: show_change_password_dialog()),
+                tile(ft.Icons.LOGOUT, "Logout", "Sign out of your session", on_click=lambda e: do_logout()),
+            ],
+        )
+
+        left_panel = ft.Container(
+            expand=True,
+            border_radius=22,
+            bgcolor=C("FORM_BG"),
+            border=ft.border.all(1.5, C("BORDER_COLOR")),
+            padding=22,
+            content=ft.Column(
+                expand=True,
+                spacing=16,
+                controls=[
+                    ft.Row(
+                        alignment=ft.MainAxisAlignment.SPACE_BETWEEN,
+                        controls=[
+                            ft.Text("Settings", size=20, weight=ft.FontWeight.BOLD, color=C("TEXT_PRIMARY")),
+                            ft.Container(
+                                padding=ft.padding.symmetric(horizontal=10, vertical=6),
+                                border_radius=999,
+                                bgcolor=ft.Colors.with_opacity(0.12, C("BUTTON_COLOR")),
+                                content=ft.Text("Manage your app", size=11, color=C("TEXT_PRIMARY")),
+                            ),
+                        ],
+                    ),
+                    profile_card,
+                    ft.Container(height=2),
+                    settings_stack,
+                ],
+            ),
+        )
+
+        # Right column (preview/info panel)
+        preview_panel = ft.Container(
+            expand=True,
+            border_radius=22,
+            bgcolor=C("FORM_BG"),
+            border=ft.border.all(1.5, C("BORDER_COLOR")),
+            padding=22,
+            content=ft.Column(
+                expand=True,
+                spacing=14,
+                controls=[
+                    ft.Text("Quick Tips", size=16, weight=ft.FontWeight.BOLD, color=C("TEXT_PRIMARY")),
+                    ft.Container(
+                        border_radius=18,
+                        bgcolor="white",
+                        border=ft.border.all(1.5, C("BORDER_COLOR")),
+                        padding=16,
+                        shadow=soft_shadow(),
+                        content=ft.Column(
+                            spacing=10,
+                            controls=[
+                                ft.Row(
+                                    spacing=10,
+                                    controls=[
+                                        ft.Icon(ft.Icons.TIPS_AND_UPDATES, color=C("BUTTON_COLOR")),
+                                        ft.Text("Theme changes apply instantly.", size=12, color=C("TEXT_PRIMARY")),
+                                    ],
+                                ),
+                                ft.Row(
+                                    spacing=10,
+                                    controls=[
+                                        ft.Icon(ft.Icons.SECURITY, color=C("BUTTON_COLOR")),
+                                        ft.Text("Use a strong password for your account.", size=12, color=C("TEXT_PRIMARY")),
+                                    ],
+                                ),
+                                ft.Row(
+                                    spacing=10,
+                                    controls=[
+                                        ft.Icon(ft.Icons.EVENT_NOTE, color=C("BUTTON_COLOR")),
+                                        ft.Text("Set due dates so tasks show on the calendar.", size=12, color=C("TEXT_PRIMARY")),
+                                    ],
+                                ),
+                            ],
+                        ),
+                    ),
+                    ft.Text("Current Theme", size=12, weight=ft.FontWeight.BOLD, color=C("TEXT_PRIMARY")),
+                    ft.Container(
+                        border_radius=18,
+                        bgcolor="white",
+                        border=ft.border.all(1.5, C("BORDER_COLOR")),
+                        padding=16,
+                        shadow=soft_shadow(),
+                        content=ft.Row(
+                            spacing=12,
+                            controls=[
+                                ft.Container(
+                                    width=14,
+                                    height=14,
+                                    border_radius=99,
+                                    bgcolor=C("BUTTON_COLOR"),
+                                ),
+                                ft.Text(S.theme_name or "Light Mode", size=13, color=C("TEXT_PRIMARY")),
+                            ],
+                        ),
+                    ),
+                ],
+            ),
+        )
+
+        # Main board layout (2 columns)
         board = ft.Container(
             expand=True,
             border_radius=22,
             border=ft.border.all(2, C("BORDER_COLOR")),
             bgcolor=C("BG_COLOR"),
-            padding=28,
+            padding=22,
             content=ft.Row(
-                [inner_card],
-                alignment=ft.MainAxisAlignment.CENTER,
-                vertical_alignment=ft.CrossAxisAlignment.CENTER,
+                expand=True,
+                spacing=18,
+                vertical_alignment=ft.CrossAxisAlignment.STRETCH,
+                controls=[
+                    ft.Container(content=left_panel, expand=6),
+                    ft.Container(content=preview_panel, expand=4),
+                ],
             ),
         )
 
-        # Outer wrapper (NO HEADER)
         return ft.Container(
             expand=True,
             bgcolor=C("BG_COLOR"),

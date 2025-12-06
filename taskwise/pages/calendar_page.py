@@ -48,6 +48,9 @@ class CalendarPage:
         def month_abbr(m: int) -> str:
             return ["JAN", "FEB", "MAR", "APR", "MAY", "JUN", "JUL", "AUG", "SEP", "OCT", "NOV", "DEC"][m - 1]
 
+        def pretty_long(d: date) -> str:
+            return d.strftime("%B %d, %Y")
+
         # ---------------------------
         # Normalize shared state
         # ---------------------------
@@ -65,12 +68,8 @@ class CalendarPage:
 
         # ---------------------------
         # PH Holidays (English)
-        # - Includes common regular holidays + special days
-        # - Includes Holy Week dates computed from Easter (Maundy Thursday + Good Friday + Black Saturday)
-        # - Eid holidays vary yearly; those are not computed here.
         # ---------------------------
         def easter_sunday(y: int) -> date:
-            # Anonymous Gregorian algorithm (Meeus/Jones/Butcher)
             a = y % 19
             b = y // 100
             c = y % 100
@@ -89,7 +88,7 @@ class CalendarPage:
 
         def last_monday(y: int, m: int) -> date:
             d = date(y, m, days_in_month(y, m))
-            while d.weekday() != 0:  # Monday
+            while d.weekday() != 0:
                 d -= timedelta(days=1)
             return d
 
@@ -99,33 +98,26 @@ class CalendarPage:
             def add(mm: int, dd: int, name: str):
                 hol[fmt_date(date(y, mm, dd))] = name
 
-            # Regular holidays (commonly observed)
             add(1, 1, "New Year's Day")
             add(4, 9, "Araw ng Kagitingan (Day of Valor)")
             add(5, 1, "Labor Day")
             add(6, 12, "Independence Day")
             add(8, 21, "Ninoy Aquino Day")
-            hol[fmt_date(last_monday(y, 8))] = "National Heroes Day"  # last Monday of August
+            hol[fmt_date(last_monday(y, 8))] = "National Heroes Day"
             add(11, 30, "Bonifacio Day")
             add(12, 25, "Christmas Day")
             add(12, 30, "Rizal Day")
 
-            # Common special (non-working) holidays (often observed)
             add(2, 25, "EDSA People Power Revolution Anniversary")
             add(11, 1, "All Saints' Day")
             add(11, 2, "All Souls' Day")
             add(12, 8, "Immaculate Conception of Mary")
             add(12, 31, "Last Day of the Year")
 
-            # Holy Week (computed)
             easter = easter_sunday(y)
-            maundy = easter - timedelta(days=3)
-            good_friday = easter - timedelta(days=2)
-            black_saturday = easter - timedelta(days=1)
-
-            hol[fmt_date(maundy)] = "Maundy Thursday"
-            hol[fmt_date(good_friday)] = "Good Friday"
-            hol[fmt_date(black_saturday)] = "Black Saturday"
+            hol[fmt_date(easter - timedelta(days=3))] = "Maundy Thursday"
+            hol[fmt_date(easter - timedelta(days=2))] = "Good Friday"
+            hol[fmt_date(easter - timedelta(days=1))] = "Black Saturday"
 
             return hol
 
@@ -137,9 +129,12 @@ class CalendarPage:
         # ---------------------------
         # Task helpers
         # ---------------------------
+        def all_tasks():
+            return db.get_all_tasks()
+
         def build_due_set(y: int, m: int) -> set:
             result = set()
-            for t in db.get_all_tasks():
+            for t in all_tasks():
                 dd = safe_parse((t[4] or "").strip())
                 if dd and dd.year == y and dd.month == m:
                     result.add(fmt_date(dd))
@@ -148,10 +143,26 @@ class CalendarPage:
         def tasks_for_date(d: date):
             ds = fmt_date(d)
             out = []
-            for t in db.get_all_tasks():
+            for t in all_tasks():
                 if (t[4] or "").strip() == ds:
                     out.append(t)
             return out
+
+        def num_tasks_for_month(y: int, m: int) -> int:
+            n = 0
+            for t in all_tasks():
+                dd = safe_parse((t[4] or "").strip())
+                if dd and dd.year == y and dd.month == m:
+                    n += 1
+            return n
+
+        def num_holidays_for_month(y: int, m: int) -> int:
+            n = 0
+            for k in holidays.keys():
+                dd = safe_parse(k)
+                if dd and dd.year == y and dd.month == m:
+                    n += 1
+            return n
 
         # ---------------------------
         # Refresh
@@ -180,8 +191,53 @@ class CalendarPage:
                 S.cal_month += 1
             refresh()
 
+        def go_today(e=None):
+            S.selected_date = TODAY
+            S.cal_year = TODAY.year
+            S.cal_month = TODAY.month
+            refresh()
+
         # ---------------------------
-        # Calendar grid (bigger + fills space)
+        # Small UI helpers
+        # ---------------------------
+        def pill(text: str, bgcolor: str, fg: str = "white"):
+            return ft.Container(
+                padding=ft.padding.symmetric(horizontal=12, vertical=7),
+                border_radius=999,
+                bgcolor=bgcolor,
+                content=ft.Text(text, size=11, color=fg, weight=ft.FontWeight.W_600),
+            )
+
+        def mini_stat(label: str, value: str, icon):
+            return ft.Container(
+                padding=12,
+                border_radius=14,
+                bgcolor="white",
+                border=ft.border.all(1, C("BORDER_COLOR")),
+                content=ft.Row(
+                    spacing=10,
+                    controls=[
+                        ft.Container(
+                            width=34,
+                            height=34,
+                            border_radius=10,
+                            bgcolor=C("BUTTON_COLOR"),
+                            alignment=ft.alignment.center,
+                            content=ft.Icon(icon, size=18, color="white"),
+                        ),
+                        ft.Column(
+                            spacing=1,
+                            controls=[
+                                ft.Text(label, size=11, color=C("TEXT_SECONDARY")),
+                                ft.Text(value, size=14, weight=ft.FontWeight.BOLD, color=C("TEXT_PRIMARY")),
+                            ],
+                        ),
+                    ],
+                ),
+            )
+
+        # ---------------------------
+        # Calendar grid (modern)
         # ---------------------------
         def select_day(d: date):
             S.selected_date = d
@@ -199,14 +255,14 @@ class CalendarPage:
 
             weekday_labels = ["SUN", "MON", "TUE", "WED", "THU", "FRI", "SAT"]
 
-            # Bigger cells
-            cell = 44
+            # slightly bigger cells
+            cell = 48
 
             header_row = ft.Row(
                 [
                     ft.Container(
                         width=cell,
-                        height=22,
+                        height=24,
                         alignment=ft.alignment.center,
                         content=ft.Text(lbl, size=10, weight=ft.FontWeight.BOLD, color=C("TEXT_SECONDARY")),
                     )
@@ -222,70 +278,59 @@ class CalendarPage:
             for day in range(1, dim + 1):
                 d = date(y, m, day)
                 ds = fmt_date(d)
-                hol = holiday_name(d)
 
+                hol = holiday_name(d)
                 is_selected = (S.selected_date == d)
                 is_today = (d == TODAY)
                 has_task = ds in due_set
                 is_holiday = bool(hol)
 
-                bg = None
-                txt_color = C("TEXT_PRIMARY")
+                # styling
+                bg = "white"
+                border_col = C("BORDER_COLOR")
+                num_col = C("TEXT_PRIMARY")
 
                 if is_selected:
                     bg = C("BUTTON_COLOR")
-                    txt_color = ft.Colors.WHITE
-                elif is_holiday:
-                    bg = ft.Colors.with_opacity(0.12, C("ERROR_COLOR"))
-                elif has_task:
-                    bg = ft.Colors.with_opacity(0.12, C("SUCCESS_COLOR"))
+                    num_col = "white"
+                    border_col = C("BUTTON_COLOR")
                 elif is_today:
-                    bg = ft.Colors.with_opacity(0.10, C("BUTTON_COLOR"))
+                    bg = ft.Colors.with_opacity(0.12, C("BUTTON_COLOR"))
+                elif is_holiday:
+                    bg = ft.Colors.with_opacity(0.10, C("ERROR_COLOR"))
+                elif has_task:
+                    bg = ft.Colors.with_opacity(0.10, C("SUCCESS_COLOR"))
 
-                # Tiny dot indicator (holiday/task) inside cell
-                dot_row = ft.Row(
-                    [
-                        ft.Container(
-                            width=6,
-                            height=6,
-                            border_radius=99,
-                            bgcolor=C("ERROR_COLOR") if is_holiday else None,
-                        )
-                        if is_holiday
-                        else ft.Container(width=6, height=6),
-                        ft.Container(
-                            width=6,
-                            height=6,
-                            border_radius=99,
-                            bgcolor=C("SUCCESS_COLOR") if has_task else None,
-                        )
-                        if has_task
-                        else ft.Container(width=6, height=6),
-                    ],
+                # clean indicators
+                indicators = ft.Row(
                     alignment=ft.MainAxisAlignment.CENTER,
                     spacing=6,
+                    controls=[
+                        ft.Container(width=7, height=7, border_radius=99, bgcolor=C("ERROR_COLOR")) if is_holiday else ft.Container(width=7, height=7),
+                        ft.Container(width=7, height=7, border_radius=99, bgcolor=C("SUCCESS_COLOR")) if has_task else ft.Container(width=7, height=7),
+                    ],
                 )
 
                 cells.append(
                     ft.Container(
                         width=cell,
                         height=cell,
-                        border_radius=10,
-                        border=ft.border.all(1, C("BORDER_COLOR")),
+                        border_radius=12,
+                        border=ft.border.all(1, border_col),
                         bgcolor=bg,
                         ink=True,
                         on_click=lambda e, dd=d: select_day(dd),
                         content=ft.Column(
-                            [
-                                ft.Container(
-                                    alignment=ft.alignment.center,
-                                    expand=True,
-                                    content=ft.Text(str(day), size=12, weight=ft.FontWeight.BOLD, color=txt_color),
-                                ),
-                                ft.Container(height=12, alignment=ft.alignment.center, content=dot_row),
-                            ],
-                            spacing=0,
                             expand=True,
+                            spacing=0,
+                            controls=[
+                                ft.Container(
+                                    expand=True,
+                                    alignment=ft.alignment.center,
+                                    content=ft.Text(str(day), size=12, weight=ft.FontWeight.BOLD, color=num_col),
+                                ),
+                                ft.Container(height=14, alignment=ft.alignment.center, content=indicators),
+                            ],
                         ),
                     )
                 )
@@ -306,38 +351,76 @@ class CalendarPage:
             return ft.Column([header_row, ft.Container(height=8)] + rows, spacing=8)
 
         # ---------------------------
-        # Left panel (date + holiday + tasks)
+        # Left panel (date + stats + tasks)
         # ---------------------------
         def build_left_panel():
             d = S.selected_date
-            ds_human = d.strftime("%B %d, %Y")
             hol = holiday_name(d)
-
             items = tasks_for_date(d)
 
+            tasks_today = len(tasks_for_date(TODAY))
+            tasks_month = num_tasks_for_month(S.cal_year, S.cal_month)
+            hol_month = num_holidays_for_month(S.cal_year, S.cal_month)
+
             header_block = ft.Container(
-                border_radius=16,
+                border_radius=18,
                 border=ft.border.all(1, C("BORDER_COLOR")),
-                bgcolor=ft.Colors.with_opacity(0.20, C("BUTTON_COLOR")),
-                padding=16,
+                bgcolor=ft.Colors.with_opacity(0.18, C("BUTTON_COLOR")),
+                padding=18,
                 content=ft.Column(
-                    [
-                        ft.Text(ds_human, size=18, weight=ft.FontWeight.BOLD, color=C("TEXT_PRIMARY")),
-                        ft.Text(hol if hol else "No holiday", size=12, color=C("TEXT_SECONDARY")),
+                    spacing=8,
+                    controls=[
+                        ft.Row(
+                            alignment=ft.MainAxisAlignment.SPACE_BETWEEN,
+                            controls=[
+                                ft.Text(pretty_long(d), size=18, weight=ft.FontWeight.BOLD, color=C("TEXT_PRIMARY")),
+                                ft.TextButton("Today", on_click=go_today),
+                            ],
+                        ),
+                        ft.Row(
+                            spacing=10,
+                            controls=[
+                                pill(hol if hol else "No holiday", bgcolor=C("TEXT_PRIMARY")),
+                                pill(f"{len(items)} task(s)", bgcolor=C("BUTTON_COLOR")),
+                            ],
+                        ),
+                        ft.Row(
+                            spacing=10,
+                            controls=[
+                                ft.Container(expand=True, content=mini_stat("Tasks Today", str(tasks_today), ft.Icons.TODAY)),
+                                ft.Container(expand=True, content=mini_stat("This Month", str(tasks_month), ft.Icons.DATE_RANGE)),
+                                ft.Container(expand=True, content=mini_stat("Holidays", str(hol_month), ft.Icons.FLAG)),
+                            ],
+                        ),
                     ],
-                    spacing=6,
                 ),
             )
+
+            def status_chip(status: str):
+                if status == "completed":
+                    return pill("Completed", bgcolor=C("SUCCESS_COLOR"))
+                return pill("Pending", bgcolor=C("BUTTON_COLOR"))
+
+            def category_chip(cat: str):
+                return pill((cat or "None").strip(), bgcolor=C("TEXT_PRIMARY"))
 
             if not items:
                 list_area = ft.Container(
                     expand=True,
-                    border_radius=16,
+                    border_radius=18,
                     border=ft.border.all(1, C("BORDER_COLOR")),
-                    bgcolor=C("BG_COLOR"),
-                    padding=16,
+                    bgcolor="white",
+                    padding=18,
                     alignment=ft.alignment.center,
-                    content=ft.Text("No tasks on this day.", size=12, color=C("TEXT_SECONDARY")),
+                    content=ft.Column(
+                        horizontal_alignment=ft.CrossAxisAlignment.CENTER,
+                        spacing=8,
+                        controls=[
+                            ft.Icon(ft.Icons.EVENT_BUSY, size=44, color=C("TEXT_SECONDARY")),
+                            ft.Text("No tasks on this day.", size=12, color=C("TEXT_SECONDARY")),
+                            ft.Text("Pick another date or add a task from Tasks.", size=11, color=C("TEXT_SECONDARY")),
+                        ],
+                    ),
                 )
             else:
                 cards = []
@@ -346,49 +429,58 @@ class CalendarPage:
                     cards.append(
                         ft.Container(
                             padding=14,
-                            border_radius=14,
+                            border_radius=16,
                             border=ft.border.all(1, C("BORDER_COLOR")),
-                            bgcolor=C("FORM_BG"),
+                            bgcolor="white",
+                            shadow=ft.BoxShadow(blur_radius=10, color="#00000010", offset=ft.Offset(0, 6)),
                             content=ft.Column(
-                                [
+                                spacing=8,
+                                controls=[
                                     ft.Text(title, size=13, weight=ft.FontWeight.BOLD, color=C("TEXT_PRIMARY")),
-                                    ft.Text((desc or "No description").strip(), size=11, color=C("TEXT_SECONDARY")),
-                                    ft.Text(
-                                        f"Category: {(cat or 'None').strip()} • Status: {status}",
-                                        size=10,
-                                        color=C("TEXT_SECONDARY"),
+                                    ft.Text((desc or "No description").strip() or "No description", size=11, color=C("TEXT_SECONDARY"), max_lines=2, overflow=ft.TextOverflow.ELLIPSIS),
+                                    ft.Row(
+                                        spacing=8,
+                                        controls=[
+                                            category_chip(cat),
+                                            status_chip(status),
+                                            pill(due if due else "No due date", bgcolor=C("BORDER_COLOR"), fg=C("TEXT_PRIMARY")),
+                                        ],
                                     ),
                                 ],
-                                spacing=6,
                             ),
                         )
                     )
 
                 list_area = ft.Container(
                     expand=True,
-                    border_radius=16,
+                    border_radius=18,
                     border=ft.border.all(1, C("BORDER_COLOR")),
-                    bgcolor=C("BG_COLOR"),
+                    bgcolor="white",
                     padding=14,
-                    content=ft.Column(cards, spacing=10, scroll=ft.ScrollMode.AUTO, expand=True),
+                    content=ft.ListView(expand=True, spacing=10, controls=cards),
                 )
 
             return ft.Container(
                 expand=True,
                 border_radius=22,
-                border=ft.border.all(2, C("BORDER_COLOR")),
+                border=ft.border.all(1, C("BORDER_COLOR")),
                 bgcolor=C("FORM_BG"),
                 padding=22,
                 content=ft.Column(
-                    [
-                        ft.Text("Calendar", size=20, weight=ft.FontWeight.BOLD, color=C("TEXT_PRIMARY")),
-                        ft.Container(height=12),
+                    expand=True,
+                    spacing=14,
+                    controls=[
+                        ft.Row(
+                            alignment=ft.MainAxisAlignment.SPACE_BETWEEN,
+                            controls=[
+                                ft.Text("Calendar", size=20, weight=ft.FontWeight.BOLD, color=C("TEXT_PRIMARY")),
+                                pill("Selected", bgcolor=C("BUTTON_COLOR")),
+                            ],
+                        ),
                         header_block,
-                        ft.Container(height=14),
+                        ft.Text("Tasks On This Day", size=13, weight=ft.FontWeight.BOLD, color=C("TEXT_PRIMARY")),
                         list_area,
                     ],
-                    spacing=0,
-                    expand=True,
                 ),
             )
 
@@ -397,40 +489,37 @@ class CalendarPage:
         # ---------------------------
         def build_right_panel():
             y, m = S.cal_year, S.cal_month
+            due_set = build_due_set(y, m)
+            tasks_month = num_tasks_for_month(y, m)
 
             top_bar = ft.Container(
-                border_radius=16,
+                border_radius=18,
                 bgcolor=C("BUTTON_COLOR"),
                 padding=ft.padding.symmetric(horizontal=14, vertical=10),
                 content=ft.Row(
-                    [
-                        ft.IconButton(icon=ft.Icons.CHEVRON_LEFT, icon_color=ft.Colors.WHITE, on_click=prev_month),
-                        ft.Row(
-                            [
-                                ft.Container(
-                                    padding=ft.padding.symmetric(horizontal=10, vertical=4),
-                                    border_radius=10,
-                                    bgcolor=ft.Colors.with_opacity(0.20, ft.Colors.WHITE),
-                                    content=ft.Text(str(m).zfill(2), size=12, weight=ft.FontWeight.BOLD, color=ft.Colors.WHITE),
-                                ),
-                                ft.Text(month_abbr(m), size=12, weight=ft.FontWeight.BOLD, color=ft.Colors.WHITE),
-                                ft.Text(str(y), size=12, weight=ft.FontWeight.BOLD, color=ft.Colors.WHITE),
-                            ],
-                            spacing=10,
-                        ),
-                        ft.IconButton(icon=ft.Icons.CHEVRON_RIGHT, icon_color=ft.Colors.WHITE, on_click=next_month),
-                    ],
                     alignment=ft.MainAxisAlignment.SPACE_BETWEEN,
                     vertical_alignment=ft.CrossAxisAlignment.CENTER,
+                    controls=[
+                        ft.IconButton(icon=ft.Icons.CHEVRON_LEFT, icon_color="white", on_click=prev_month),
+                        ft.Row(
+                            spacing=10,
+                            controls=[
+                                ft.Text(month_abbr(m), size=13, weight=ft.FontWeight.BOLD, color="white"),
+                                ft.Text(str(y), size=13, weight=ft.FontWeight.BOLD, color="white"),
+                                pill(f"{tasks_month} due", bgcolor=ft.Colors.with_opacity(0.20, ft.Colors.WHITE)),
+                            ],
+                        ),
+                        ft.IconButton(icon=ft.Icons.CHEVRON_RIGHT, icon_color="white", on_click=next_month),
+                    ],
                 ),
             )
 
             grid = ft.Container(
                 expand=True,
                 padding=16,
-                border_radius=16,
-                bgcolor=C("BG_COLOR"),
-                border=ft.border.all(2, C("BORDER_COLOR")),
+                border_radius=18,
+                bgcolor="white",
+                border=ft.border.all(1, C("BORDER_COLOR")),
                 content=build_calendar_grid(),
             )
 
@@ -450,6 +539,13 @@ class CalendarPage:
                         ],
                         spacing=8,
                     ),
+                    ft.Row(
+                        [
+                            ft.Container(width=10, height=10, border_radius=99, bgcolor=C("BUTTON_COLOR")),
+                            ft.Text("Selected", size=11, color=C("TEXT_SECONDARY")),
+                        ],
+                        spacing=8,
+                    ),
                 ],
                 spacing=18,
                 alignment=ft.MainAxisAlignment.CENTER,
@@ -458,44 +554,48 @@ class CalendarPage:
             return ft.Container(
                 expand=True,
                 border_radius=22,
-                border=ft.border.all(2, C("BORDER_COLOR")),
+                border=ft.border.all(1, C("BORDER_COLOR")),
                 bgcolor=C("FORM_BG"),
                 padding=20,
                 content=ft.Column(
-                    [
+                    expand=True,
+                    spacing=12,
+                    controls=[
                         top_bar,
-                        ft.Container(height=12),
+                        ft.Row(
+                            alignment=ft.MainAxisAlignment.SPACE_BETWEEN,
+                            controls=[
+                                ft.Text("Month View", size=13, weight=ft.FontWeight.BOLD, color=C("TEXT_PRIMARY")),
+                                pill(pretty_long(S.selected_date), bgcolor=C("TEXT_PRIMARY")),
+                            ],
+                        ),
                         grid,
-                        ft.Container(height=10),
                         legend,
                     ],
-                    spacing=0,
-                    expand=True,
                 ),
             )
 
         # ---------------------------
-        # Board (MAXIMIZED)
+        # Board
         # ---------------------------
         board = ft.Container(
             expand=True,
             border_radius=22,
-            border=ft.border.all(2, C("BORDER_COLOR")),
+            border=ft.border.all(1, C("BORDER_COLOR")),
             bgcolor=C("BG_COLOR"),
-            padding=26,
+            padding=22,
             content=ft.Row(
-                [
-                    ft.Container(content=build_left_panel(), expand=5),
-                    ft.Container(width=26),
-                    ft.Container(content=build_right_panel(), expand=6),
-                ],
                 expand=True,
                 alignment=ft.MainAxisAlignment.CENTER,
                 vertical_alignment=ft.CrossAxisAlignment.STRETCH,
+                controls=[
+                    ft.Container(content=build_left_panel(), expand=5),
+                    ft.Container(width=22),
+                    ft.Container(content=build_right_panel(), expand=6),
+                ],
             ),
         )
 
-        # Outer wrapper: fill window and keep center padding like wireframe
         return ft.Container(
             expand=True,
             bgcolor=C("BG_COLOR"),
