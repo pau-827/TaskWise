@@ -3,11 +3,13 @@ from datetime import datetime
 from taskwise.database import Database
 from taskwise.theme import THEMES
 
+
 class AppState:
     """
     Shared application state. Pages receive an AppState instance
     and use it for DB access, theme colors, user, calendar state, etc.
     """
+
     def __init__(self):
         self.db = Database()
 
@@ -32,16 +34,20 @@ class AppState:
         self.cal_month = today.month
         self.holidays_cache = {}
 
-        # callback that pages set to render
+        # callback used by app.py to re-render
         self._update_callback = None
 
     def set_update_callback(self, fn):
         self._update_callback = fn
 
-    def go(self, view_name: str):
-        self.current_view = view_name
+    def update(self):
+        """Force UI refresh (used by pages and app shell)."""
         if self._update_callback:
             self._update_callback()
+
+    def go(self, view_name: str):
+        self.current_view = view_name
+        self.update()
 
     def set_theme(self, theme_name: str):
         if theme_name not in THEMES:
@@ -49,5 +55,4 @@ class AppState:
         self.theme_name = theme_name
         self.colors = THEMES[theme_name].copy()
         self.db.set_setting("theme_name", theme_name)
-        if self._update_callback:
-            self._update_callback()
+        self.update()

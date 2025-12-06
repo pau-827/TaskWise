@@ -1,292 +1,271 @@
 import flet as ft
 from taskwise.theme import THEMES
 
-
 class SettingsPage:
+    """
+    SETTINGS PAGE (wireframe-matched)
+    - IMPORTANT: No header here. app.py already renders the header.
+    - Layout: centered big board -> inner card -> list tiles
+    - Theme dropdown: Light Mode / Dark Mode / Pink (uses your THEMES via AppState.set_theme)
+    - Account row shows signed-in user (if any)
+    - Change Password + Logout use TaskPage's shared auth dialogs if you exposed hashing in state.
+      If your Database already has change_password(), it will work.
+    """
+
     def __init__(self, state):
-        self.S = state  # AppState
+        self.S = state
 
     def view(self, page: ft.Page):
         S = self.S
         db = S.db
 
-        # Short color alias
-        def C(k): 
-            return S.colors[k]
+        def C(k: str) -> str:
+            return S.colors.get(k, "#000000")
 
-        # ============================================================
-        # HEADER
-        # ============================================================
-        def header():
-            def nav(view): 
-                return lambda e: S.go(view)
+        # -----------------------------
+        # Helpers
+        # -----------------------------
+        def refresh():
+            S.update()
 
-            def tab(label, key):
-                active = (S.current_view == key)
-                txt = f"✱ {label} ✱" if active else label
-                return ft.TextButton(
-                    txt, 
-                    on_click=nav(key),
-                    style=ft.ButtonStyle(color=C("TEXT_PRIMARY"))
-                )
+        # -----------------------------
+        # Dialogs
+        # -----------------------------
+        def show_account_dialog():
+            name = S.user.get("name") if S.user else ""
+            email = S.user.get("email") if S.user else ""
 
+            content = ft.Column(
+                [
+                    ft.Text("Not signed in.", color=C("TEXT_SECONDARY"))
+                    if not S.user
+                    else ft.Column(
+                        [
+                            ft.Text(f"Name: {name}", color=C("TEXT_PRIMARY")),
+                            ft.Text(f"Email: {email}", color=C("TEXT_SECONDARY")),
+                        ],
+                        spacing=6,
+                    ),
+                ],
+                tight=True,
+                spacing=10,
+            )
+
+            dlg = ft.AlertDialog(
+                modal=True,
+                bgcolor=C("FORM_BG"),
+                title=ft.Text("Account", weight=ft.FontWeight.BOLD, color=C("TEXT_PRIMARY")),
+                content=ft.Container(width=420, content=content, padding=8),
+                actions=[ft.TextButton("Close", on_click=lambda e: close_dialog(dlg))],
+                actions_alignment=ft.MainAxisAlignment.END,
+                shape=ft.RoundedRectangleBorder(radius=16),
+            )
+            page.overlay.append(dlg)
+            dlg.open = True
+            page.update()
+
+        def close_dialog(dlg):
+            dlg.open = False
+            page.update()
+
+        def hash_pw(s: str) -> str:
+            # uses TaskPage-provided hash wrapper if available
+            if hasattr(S, "_hash_pw"):
+                return S._hash_pw(s)
+            import hashlib
+            return hashlib.sha256((s or "").encode("utf-8")).hexdigest()
+
+        def show_change_password_dialog():
+            current_tf = ft.TextField(
+                hint_text="Current Password",
+                password=True,
+                can_reveal_password=True,
+                bgcolor=C("BG_COLOR"),
+                filled=True,
+                border_color=C("BORDER_COLOR"),
+                border_radius=12,
+                color=C("TEXT_PRIMARY"),
+            )
+            new_tf = ft.TextField(
+                hint_text="New Password",
+                password=True,
+                can_reveal_password=True,
+                bgcolor=C("BG_COLOR"),
+                filled=True,
+                border_color=C("BORDER_COLOR"),
+                border_radius=12,
+                color=C("TEXT_PRIMARY"),
+            )
+            confirm_tf = ft.TextField(
+                hint_text="Confirm Password",
+                password=True,
+                can_reveal_password=True,
+                bgcolor=C("BG_COLOR"),
+                filled=True,
+                border_color=C("BORDER_COLOR"),
+                border_radius=12,
+                color=C("TEXT_PRIMARY"),
+            )
+
+            def save(e):
+                if not S.user:
+                    page.snack_bar = ft.SnackBar(content=ft.Text("Please login first."), bgcolor=C("ERROR_COLOR"))
+                    page.snack_bar.open = True
+                    page.update()
+                    return
+
+                row = db.get_user_by_email(S.user["email"])
+                if not row:
+                    page.snack_bar = ft.SnackBar(content=ft.Text("Account not found."), bgcolor=C("ERROR_COLOR"))
+                    page.snack_bar.open = True
+                    page.update()
+                    return
+
+                user_id, name, em, pw_hash = row
+                if hash_pw(current_tf.value or "") != pw_hash:
+                    page.snack_bar = ft.SnackBar(content=ft.Text("Current password is wrong."), bgcolor=C("ERROR_COLOR"))
+                    page.snack_bar.open = True
+                    page.update()
+                    return
+
+                if (new_tf.value or "") != (confirm_tf.value or ""):
+                    page.snack_bar = ft.SnackBar(content=ft.Text("Passwords do not match."), bgcolor=C("ERROR_COLOR"))
+                    page.snack_bar.open = True
+                    page.update()
+                    return
+
+                if not (new_tf.value or "").strip():
+                    page.snack_bar = ft.SnackBar(content=ft.Text("New password is empty."), bgcolor=C("ERROR_COLOR"))
+                    page.snack_bar.open = True
+                    page.update()
+                    return
+
+                db.change_password(user_id, hash_pw(new_tf.value))
+                dlg.open = False
+                page.snack_bar = ft.SnackBar(content=ft.Text("Password updated."), bgcolor=C("SUCCESS_COLOR"))
+                page.snack_bar.open = True
+                page.update()
+
+            dlg = ft.AlertDialog(
+                modal=True,
+                bgcolor=C("FORM_BG"),
+                title=ft.Text("Change Password", weight=ft.FontWeight.BOLD, color=C("TEXT_PRIMARY")),
+                content=ft.Container(
+                    width=420,
+                    padding=8,
+                    content=ft.Column([current_tf, new_tf, confirm_tf], spacing=12, tight=True),
+                ),
+                actions=[
+                    ft.TextButton("Cancel", on_click=lambda e: close_dialog(dlg)),
+                    ft.ElevatedButton("Save", on_click=save, bgcolor=C("BUTTON_COLOR"), color=ft.Colors.WHITE),
+                ],
+                actions_alignment=ft.MainAxisAlignment.END,
+                shape=ft.RoundedRectangleBorder(radius=16),
+            )
+            page.overlay.append(dlg)
+            dlg.open = True
+            page.update()
+
+        def do_logout():
+            S.user = None
+            page.snack_bar = ft.SnackBar(content=ft.Text("Logged out."), bgcolor=C("SUCCESS_COLOR"))
+            page.snack_bar.open = True
+            refresh()
+            page.update()
+
+        # -----------------------------
+        # UI building blocks
+        # -----------------------------
+        def tile(text_left: str, right_control: ft.Control | None = None, on_click=None):
             return ft.Container(
-                bgcolor=C("HEADER_BG"),
-                padding=ft.padding.symmetric(horizontal=24, vertical=14),
-                border=ft.border.only(bottom=ft.BorderSide(1, C("BORDER_COLOR"))),
+                height=52,
+                border_radius=14,
+                border=ft.border.all(1.5, C("BORDER_COLOR")),
+                bgcolor=C("BG_COLOR"),
+                padding=ft.padding.symmetric(horizontal=16, vertical=10),
+                ink=True,
+                on_click=on_click,
                 content=ft.Row(
                     [
-                        ft.Text("TaskWise", size=18, weight="bold", color=C("TEXT_PRIMARY")),
-                        ft.Row([tab("Tasks", "tasks"), tab("Calendar", "calendar"), tab("Settings", "settings")], spacing=8),
-                        build_account_menu(),
+                        ft.Text(text_left, size=14, weight=ft.FontWeight.BOLD, color=C("TEXT_PRIMARY")),
+                        right_control if right_control else ft.Icon(ft.Icons.CHEVRON_RIGHT, color=C("TEXT_SECONDARY")),
                     ],
-                    alignment="spaceBetween"
+                    alignment=ft.MainAxisAlignment.SPACE_BETWEEN,
+                    vertical_alignment=ft.CrossAxisAlignment.CENTER,
                 ),
             )
 
-        # ============================================================
-        # ACCOUNT MENU (Login, Create Account, Logout)
-        # ============================================================
-        def build_account_menu():
-
-            # --- LOGOUT ---
-            def do_logout(e):
-                S.user = None
-                page.snack_bar = ft.SnackBar(content=ft.Text("Logged out"), bgcolor=C("SUCCESS_COLOR"))
-                page.snack_bar.open = True
-                refresh()
-
-            # --- LOGIN DIALOG ---
-            def show_login():
-                email = ft.TextField(label="Email", filled=True, bgcolor=C("BG_COLOR"), border_color=C("BORDER_COLOR"))
-                pw = ft.TextField(
-                    label="Password",
-                    password=True,
-                    can_reveal_password=True,
-                    filled=True,
-                    bgcolor=C("BG_COLOR"),
-                    border_color=C("BORDER_COLOR")
-                )
-
-                def login(e):
-                    em = (email.value or "").strip().lower()
-                    row = db.get_user_by_email(em)
-
-                    if not row:
-                        page.snack_bar = ft.SnackBar(content=ft.Text("Account not found"), bgcolor=C("ERROR_COLOR"))
-                        page.snack_bar.open = True
-                        return
-
-                    uid, uname, uemail, pw_hash = row
-                    if S._hash_pw(pw.value or "") != pw_hash:
-                        page.snack_bar = ft.SnackBar(content=ft.Text("Wrong password"), bgcolor=C("ERROR_COLOR"))
-                        page.snack_bar.open = True
-                        return
-
-                    S.user = {"id": uid, "name": uname, "email": uemail}
-                    dialog.open = False
-                    page.update()
-                    refresh()
-
-                dialog = ft.AlertDialog(
-                    modal=True,
-                    bgcolor=C("FORM_BG"),
-                    title=ft.Text("Login", size=18, weight="bold", color=C("TEXT_PRIMARY")),
-                    content=ft.Column([email, pw], tight=True, spacing=10),
-                    actions=[
-                        ft.TextButton("Cancel", on_click=lambda e: close_dialog(dialog)),
-                        ft.ElevatedButton("Login", on_click=login, bgcolor=C("BUTTON_COLOR"), color="white")
-                    ]
-                )
-
-                page.overlay.append(dialog)
-                dialog.open = True
-                page.update()
-
-            # --- CREATE ACCOUNT ---
-            def show_create_account():
-                name = ft.TextField(label="Name", filled=True, bgcolor=C("BG_COLOR"))
-                email = ft.TextField(label="Email", filled=True, bgcolor=C("BG_COLOR"))
-                pw = ft.TextField(
-                    label="Password",
-                    password=True,
-                    can_reveal_password=True,
-                    filled=True,
-                    bgcolor=C("BG_COLOR")
-                )
-
-                def create(e):
-                    nm = name.value.strip()
-                    em = email.value.strip().lower()
-                    pwv = pw.value.strip()
-
-                    if not (nm and em and pwv):
-                        page.snack_bar = ft.SnackBar(content=ft.Text("All fields required"), bgcolor=C("ERROR_COLOR"))
-                        page.snack_bar.open = True
-                        return
-
-                    if db.get_user_by_email(em):
-                        page.snack_bar = ft.SnackBar(content=ft.Text("Email already exists"), bgcolor=C("ERROR_COLOR"))
-                        page.snack_bar.open = True
-                        return
-
-                    db.create_user(nm, em, S._hash_pw(pwv))
-
-                    dialog.open = False
-                    page.snack_bar = ft.SnackBar(content=ft.Text("Account created!"), bgcolor=C("SUCCESS_COLOR"))
-                    page.snack_bar.open = True
-                    page.update()
-
-                dialog = ft.AlertDialog(
-                    modal=True,
-                    bgcolor=C("FORM_BG"),
-                    title=ft.Text("Create Account", size=18, weight="bold", color=C("TEXT_PRIMARY")),
-                    content=ft.Column([name, email, pw], tight=True, spacing=10),
-                    actions=[
-                        ft.TextButton("Cancel", on_click=lambda e: close_dialog(dialog)),
-                        ft.ElevatedButton("Create", on_click=create, bgcolor=C("BUTTON_COLOR"), color="white")
-                    ]
-                )
-
-                page.overlay.append(dialog)
-                dialog.open = True
-                page.update()
-
-            # --- CHANGE PASSWORD ---
-            def show_change_password():
-                if not S.user:
-                    page.snack_bar = ft.SnackBar(content=ft.Text("You must login first"), bgcolor=C("ERROR_COLOR"))
-                    page.snack_bar.open = True
-                    return
-
-                cur = ft.TextField(label="Current Password", password=True, can_reveal_password=True)
-                new1 = ft.TextField(label="New Password", password=True, can_reveal_password=True)
-                new2 = ft.TextField(label="Confirm Password", password=True, can_reveal_password=True)
-
-                def change(e):
-                    row = db.get_user_by_email(S.user["email"])
-                    uid, name, email, pw_hash = row
-
-                    if S._hash_pw(cur.value or "") != pw_hash:
-                        page.snack_bar = ft.SnackBar(content=ft.Text("Wrong current password"), bgcolor=C("ERROR_COLOR"))
-                        page.snack_bar.open = True
-                        return
-
-                    if (new1.value or "") != (new2.value or ""):
-                        page.snack_bar = ft.SnackBar(content=ft.Text("Passwords do not match"), bgcolor=C("ERROR_COLOR"))
-                        page.snack_bar.open = True
-                        return
-
-                    db.change_password(uid, S._hash_pw(new1.value))
-                    dialog.open = False
-                    page.snack_bar = ft.SnackBar(content=ft.Text("Password updated!"), bgcolor=C("SUCCESS_COLOR"))
-                    page.snack_bar.open = True
-                    page.update()
-
-                dialog = ft.AlertDialog(
-                    modal=True,
-                    bgcolor=C("FORM_BG"),
-                    title=ft.Text("Change Password", size=18, weight="bold", color=C("TEXT_PRIMARY")),
-                    content=ft.Column([cur, new1, new2], tight=True, spacing=10),
-                    actions=[
-                        ft.TextButton("Cancel", on_click=lambda e: close_dialog(dialog)),
-                        ft.ElevatedButton("Update", on_click=change, bgcolor=C("BUTTON_COLOR"), color="white")
-                    ]
-                )
-
-                page.overlay.append(dialog)
-                dialog.open = True
-                page.update()
-
-            # Build account button
-            if not S.user:
-                return ft.PopupMenuButton(
-                    icon=ft.Icons.ACCOUNT_CIRCLE,
-                    items=[
-                        ft.PopupMenuItem(text="Login", on_click=lambda e: show_login()),
-                        ft.PopupMenuItem(text="Create Account", on_click=lambda e: show_create_account()),
-                    ]
-                )
-
-            return ft.PopupMenuButton(
-                icon=ft.Icons.ACCOUNT_CIRCLE,
-                items=[
-                    ft.PopupMenuItem(text=f"Signed in as {S.user['name']}"),
-                    ft.PopupMenuItem(text="Change Password", on_click=lambda e: show_change_password()),
-                    ft.PopupMenuItem(text="Logout", on_click=do_logout),
-                ]
-            )
-
-        # Helper to close dialogs
-        def close_dialog(d):
-            d.open = False
-            page.update()
-
-        # ============================================================
-        # THEME SELECTOR
-        # ============================================================
-        theme_picker = ft.Dropdown(
-            value=S.theme_name,
-            options=[ft.dropdown.Option(t) for t in THEMES.keys()],
-            width=200,
-            border_color=C("BORDER_COLOR"),
-            bgcolor=C("BG_COLOR"),
-            filled=True,
-            color=C("TEXT_PRIMARY"),
-        )
-
-        def change_theme(e):
-            S.theme_name = theme_picker.value
-            S.colors = THEMES[theme_picker.value].copy()
-            db.set_setting("theme_name", S.theme_name)
-            refresh()
-
-        theme_picker.on_change = change_theme
-
-        # ============================================================
-        # MAIN SETTINGS PANEL
-        # ============================================================
-        def settings_panel():
-            return ft.Container(
-                bgcolor=C("FORM_BG"),
-                border_radius=16,
-                border=ft.border.all(1, C("BORDER_COLOR")),
-                padding=24,
-                expand=True,
-                content=ft.Column(
-                    [
-                        ft.Text("Settings", size=20, weight="bold", color=C("TEXT_PRIMARY")),
-                        ft.Container(height=12),
-
-                        ft.Text("Theme", size=14, weight="bold", color=C("TEXT_PRIMARY")),
-                        ft.Container(height=6),
-                        theme_picker,
-                    ],
-                    spacing=10
-                )
-            )
-
-        # ============================================================
-        # Refresh UI
-        # ============================================================
-        def refresh():
-            if S._update_callback:
-                S._update_callback()
-            page.update()
-
-        # ============================================================
-        # FINAL LAYOUT
-        # ============================================================
-        layout = ft.Column(
-            [
-                header(),
-                ft.Container(
-                    padding=20,
-                    content=settings_panel(),
-                    expand=True,
-                )
+        # Theme dropdown (wireframe-like)
+        theme_dd = ft.Dropdown(
+            value=S.theme_name if S.theme_name else "Light Mode",
+            options=[
+                ft.dropdown.Option("Light Mode"),
+                ft.dropdown.Option("Dark Mode"),
+                ft.dropdown.Option("Pink"),
             ],
-            expand=True,
+            border=ft.InputBorder.NONE,
+            filled=False,
+            width=160,
+            text_size=12,
+            content_padding=ft.padding.symmetric(horizontal=10, vertical=0),
+            on_change=lambda e: (S.set_theme(theme_dd.value), refresh()),
         )
 
-        return layout
+        # -----------------------------
+        # Center board layout (maximized like wireframe)
+        # -----------------------------
+        inner_card = ft.Container(
+            width=520,
+            border_radius=18,
+            border=ft.border.all(2, C("BORDER_COLOR")),
+            bgcolor=C("FORM_BG"),
+            padding=22,
+            content=ft.Column(
+                [
+                    ft.Text("Settings", size=20, weight=ft.FontWeight.BOLD, color=C("TEXT_PRIMARY")),
+                    ft.Container(height=10),
+
+                    # Inner list box
+                    ft.Container(
+                        border_radius=16,
+                        border=ft.border.all(2, C("BORDER_COLOR")),
+                        bgcolor=C("BG_COLOR"),
+                        padding=16,
+                        content=ft.Column(
+                            [
+                                tile("Theme", right_control=theme_dd),
+                                ft.Container(height=12),
+                                tile("Account", on_click=lambda e: show_account_dialog()),
+                                ft.Container(height=12),
+                                tile("Change Password", on_click=lambda e: show_change_password_dialog()),
+                                ft.Container(height=12),
+                                tile("Logout", on_click=lambda e: do_logout()),
+                            ],
+                            spacing=0,
+                        ),
+                    ),
+                ],
+                spacing=0,
+            ),
+        )
+
+        board = ft.Container(
+            expand=True,
+            border_radius=22,
+            border=ft.border.all(2, C("BORDER_COLOR")),
+            bgcolor=C("BG_COLOR"),
+            padding=28,
+            content=ft.Row(
+                [inner_card],
+                alignment=ft.MainAxisAlignment.CENTER,
+                vertical_alignment=ft.CrossAxisAlignment.CENTER,
+            ),
+        )
+
+        # Outer wrapper (NO HEADER)
+        return ft.Container(
+            expand=True,
+            bgcolor=C("BG_COLOR"),
+            padding=ft.padding.all(18),
+            content=board,
+        )

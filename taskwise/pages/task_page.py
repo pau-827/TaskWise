@@ -660,4 +660,8 @@ class TaskPage:
             ),
         )
 
+<<<<<<< HEAD
         return board
+=======
+        return board
+>>>>>>> 4f80da1c1605dc1817b637aed02a7c0ae04f7749
