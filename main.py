@@ -2,7 +2,7 @@ import flet as ft
 from passlib.hash import bcrypt
 import admin
 import db
-from taskwise.app import run_taskwise_app
+from taskwise.app import run_taskwise_app 
 
 
 def main(page: ft.Page):
