@@ -239,7 +239,7 @@ def main(page: ft.Page):
         page.update()
 
         # Launch your modular TaskWise app (task_page, routes, etc.)
-        run_taskwise_app(page)
+        run_taskwise_app(page, on_logout=logout)
 
     # ----------------------------------
     # NAVIGATION
@@ -394,7 +394,7 @@ def main(page: ft.Page):
 
             # ✔ USER REDIRECT (modular TaskWise)
             print("USER LOGIN → TASKWISE APP")
-            run_taskwise_app(page)
+            run_taskwise_app(page, on_logout=logout)
 
         except Exception as ex:
             show_message(f"Login failed: {ex}")

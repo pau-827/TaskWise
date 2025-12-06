@@ -6,8 +6,9 @@ from taskwise.pages.settings_page import SettingsPage
 
 
 class TaskWiseApp:
-    def __init__(self, page: ft.Page):
+    def __init__(self, page: ft.Page, on_logout):
         self.page = page
+        self.on_logout = on_logout
 
         # Shared state
         self.state = AppState()
@@ -34,10 +35,19 @@ class TaskWiseApp:
             self.state.update()
 
         def do_logout(e):
+            # Clear state
             self.state.user = None
-            self.page.snack_bar = ft.SnackBar(content=ft.Text("Logged out."), bgcolor=C["SUCCESS_COLOR"])
+
+            # Show logout snackbar (optional)
+            self.page.snack_bar = ft.SnackBar(
+                content=ft.Text("Logged out."),
+                bgcolor=C["SUCCESS_COLOR"]
+            )
             self.page.snack_bar.open = True
-            go("tasks")
+            self.page.update()
+
+            # EXIT the TaskWise UI and go back to login (handled by main.py)
+            self.on_logout()
 
         # Tabs
         def nav_button(label: str, view_name: str):
@@ -70,8 +80,7 @@ class TaskWiseApp:
                 icon=ft.Icons.ACCOUNT_CIRCLE,
                 icon_color=C["TEXT_PRIMARY"],
                 items=[
-                    # NOTE: Create Account removed (per your request)
-                    ft.PopupMenuItem(text="Login", on_click=lambda e: go("settings")),
+                    ft.PopupMenuItem(text="Logout", on_click=do_logout),
                 ],
             )
             right = ft.Row([profile_menu], spacing=8)
@@ -156,10 +165,10 @@ class TaskWiseApp:
 # -------------------------------------------------------------
 # ENTRY POINT FOR MAIN.PY TO START THE ROUTER
 # -------------------------------------------------------------
-def run_taskwise_app(page: ft.Page):
+def run_taskwise_app(page: ft.Page, on_logout):
     page.title = "TaskWise"
     page.window_maximized = True
     page.theme_mode = ft.ThemeMode.LIGHT
     page.padding = 0
 
-    TaskWiseApp(page)
+    TaskWiseApp(page, on_logout)
