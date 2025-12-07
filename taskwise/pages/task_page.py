@@ -194,8 +194,7 @@ class TaskPage:
                     S.cal_year = picked.year
                     S.cal_month = picked.month
 
-                # FIXED: Added user_id parameter
-                db.add_task(title, desc, cat, due, S.user['id'])
+                db.add_task(title, desc, cat, due)
 
                 dialog.open = False
                 page.snack_bar = ft.SnackBar(content=ft.Text("Task added!"), bgcolor=C("SUCCESS_COLOR"))
@@ -321,8 +320,7 @@ class TaskPage:
                     S.cal_year = picked.year
                     S.cal_month = picked.month
 
-                # FIXED: Added user_id parameter
-                db.update_task(task_id, title, desc, cat, due, S.user['id'])
+                db.update_task(task_id, title, desc, cat, due)
 
                 dialog.open = False
                 page.snack_bar = ft.SnackBar(content=ft.Text("Task updated!"), bgcolor=C("SUCCESS_COLOR"))
@@ -381,8 +379,7 @@ class TaskPage:
         # Task list + analytics
         # ---------------------------
         def get_filtered_tasks() -> List[tuple]:
-            # FIXED: Added user_id parameter
-            tasks = db.get_all_tasks(S.user['id'])
+            tasks = db.get_all_tasks()
 
             current_filter = getattr(S, "current_filter", "All Tasks")
             if current_filter != "All Tasks":
@@ -418,13 +415,11 @@ class TaskPage:
 
             def toggle(e):
                 new_status = "completed" if status == "pending" else "pending"
-                # FIXED: Added user_id parameter
-                db.update_task_status(task_id, new_status, S.user['id'])
+                db.update_task_status(task_id, new_status)
                 S.update()
 
             def delete(e):
-                # FIXED: Added user_id parameter
-                db.delete_task(task_id, S.user['id'])
+                db.delete_task(task_id)
                 page.snack_bar = ft.SnackBar(content=ft.Text("Task deleted!"), bgcolor=C("SUCCESS_COLOR"))
                 page.snack_bar.open = True
                 S.update()
@@ -530,8 +525,7 @@ class TaskPage:
             )
 
         def build_analytics_panel() -> ft.Control:
-            # FIXED: Added user_id parameter
-            tasks = db.get_all_tasks(S.user['id'])
+            tasks = db.get_all_tasks()
             total = len(tasks)
             completed = sum(1 for t in tasks if t[5] == "completed")
             today = datetime.now().date()
