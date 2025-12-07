@@ -13,6 +13,21 @@ class Database:
         conn = self.get_connection()
         cursor = conn.cursor()
 
+        # Very simple local accounts
+        cursor.execute(
+            """
+            CREATE TABLE IF NOT EXISTS users (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                name TEXT NOT NULL,
+                email TEXT UNIQUE NOT NULL,
+                password_hash TEXT NOT NULL,
+                role TEXT DEFAULT 'user',
+                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+            )
+        """
+        )
+
+        # Tasks table with user_id foreign key
         cursor.execute(
             """
             CREATE TABLE IF NOT EXISTS tasks (
@@ -22,21 +37,10 @@ class Database:
                 category TEXT,
                 due_date TEXT,
                 status TEXT DEFAULT 'pending',
+                user_id INTEGER NOT NULL,
                 created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-                updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
-            )
-        """
-        )
-
-        # Very simple local accounts
-        cursor.execute(
-            """
-            CREATE TABLE IF NOT EXISTS users (
-                id INTEGER PRIMARY KEY AUTOINCREMENT,
-                name TEXT NOT NULL,
-                email TEXT UNIQUE NOT NULL,
-                password_hash TEXT NOT NULL,
-                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+                updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
             )
         """
         )
@@ -55,89 +59,148 @@ class Database:
         conn.close()
 
     # ---- tasks ----
-    def add_task(self, title, description="", category="", due_date=""):
+    def add_task(self, title, description="", category="", due_date="", user_id=None):
+        if user_id is None:
+            raise ValueError("user_id is required to add a task")
+        
         conn = self.get_connection()
         cursor = conn.cursor()
         cursor.execute(
             """
-            INSERT INTO tasks (title, description, category, due_date)
-            VALUES (?, ?, ?, ?)
+            INSERT INTO tasks (title, description, category, due_date, user_id)
+            VALUES (?, ?, ?, ?, ?)
         """,
-            (title, description, category, due_date),
+            (title, description, category, due_date, user_id),
         )
         conn.commit()
         task_id = cursor.lastrowid
         conn.close()
         return task_id
 
-    def get_all_tasks(self):
+    def get_all_tasks(self, user_id=None):
         conn = self.get_connection()
         cursor = conn.cursor()
-        cursor.execute(
+        
+        if user_id is not None:
+            cursor.execute(
+                """
+                SELECT id, title, description, category, due_date, status, created_at
+                FROM tasks
+                WHERE user_id = ?
+                ORDER BY created_at DESC
+            """,
+                (user_id,),
+            )
+        else:
+            # Fallback for backward compatibility
+            cursor.execute(
+                """
+                SELECT id, title, description, category, due_date, status, created_at
+                FROM tasks
+                ORDER BY created_at DESC
             """
-            SELECT id, title, description, category, due_date, status, created_at
-            FROM tasks
-            ORDER BY created_at DESC
-        """
-        )
+            )
+        
         rows = cursor.fetchall()
         conn.close()
         return rows
 
-    def update_task(self, task_id, title, description="", category="", due_date=""):
+    def update_task(self, task_id, title, description="", category="", due_date="", user_id=None):
         conn = self.get_connection()
         cursor = conn.cursor()
-        cursor.execute(
-            """
-            UPDATE tasks
-            SET title = ?, description = ?, category = ?, due_date = ?,
-                updated_at = CURRENT_TIMESTAMP
-            WHERE id = ?
-        """,
-            (title, description, category, due_date, task_id),
-        )
+        
+        # If user_id is provided, ensure the task belongs to that user
+        if user_id is not None:
+            cursor.execute(
+                """
+                UPDATE tasks
+                SET title = ?, description = ?, category = ?, due_date = ?,
+                    updated_at = CURRENT_TIMESTAMP
+                WHERE id = ? AND user_id = ?
+            """,
+                (title, description, category, due_date, task_id, user_id),
+            )
+        else:
+            cursor.execute(
+                """
+                UPDATE tasks
+                SET title = ?, description = ?, category = ?, due_date = ?,
+                    updated_at = CURRENT_TIMESTAMP
+                WHERE id = ?
+            """,
+                (title, description, category, due_date, task_id),
+            )
+        
         conn.commit()
         conn.close()
 
-    def delete_task(self, task_id):
+    def delete_task(self, task_id, user_id=None):
         conn = self.get_connection()
         cursor = conn.cursor()
-        cursor.execute("DELETE FROM tasks WHERE id = ?", (task_id,))
+        
+        if user_id is not None:
+            cursor.execute("DELETE FROM tasks WHERE id = ? AND user_id = ?", (task_id, user_id))
+        else:
+            cursor.execute("DELETE FROM tasks WHERE id = ?", (task_id,))
+        
         conn.commit()
         conn.close()
 
-    def update_task_status(self, task_id, status):
+    def update_task_status(self, task_id, status, user_id=None):
         conn = self.get_connection()
         cursor = conn.cursor()
-        cursor.execute(
-            """
-            UPDATE tasks
-            SET status = ?, updated_at = CURRENT_TIMESTAMP
-            WHERE id = ?
-        """,
-            (status, task_id),
-        )
+        
+        if user_id is not None:
+            cursor.execute(
+                """
+                UPDATE tasks
+                SET status = ?, updated_at = CURRENT_TIMESTAMP
+                WHERE id = ? AND user_id = ?
+            """,
+                (status, task_id, user_id),
+            )
+        else:
+            cursor.execute(
+                """
+                UPDATE tasks
+                SET status = ?, updated_at = CURRENT_TIMESTAMP
+                WHERE id = ?
+            """,
+                (status, task_id),
+            )
+        
         conn.commit()
         conn.close()
 
     # ---- users ----
-    def create_user(self, name, email, password_hash):
+    def create_user(self, name, email, password_hash, role='user'):
         conn = self.get_connection()
         cursor = conn.cursor()
         cursor.execute(
-            "INSERT INTO users (name, email, password_hash) VALUES (?, ?, ?)",
-            (name, email, password_hash),
+            "INSERT INTO users (name, email, password_hash, role) VALUES (?, ?, ?, ?)",
+            (name, email, password_hash, role),
         )
         conn.commit()
+        user_id = cursor.lastrowid
         conn.close()
+        return user_id
 
     def get_user_by_email(self, email):
         conn = self.get_connection()
         cursor = conn.cursor()
-        cursor.execute("SELECT id, name, email, password_hash FROM users WHERE email = ?", (email,))
+        cursor.execute("SELECT id, name, email, password_hash, role, created_at FROM users WHERE email = ?", (email,))
         row = cursor.fetchone()
         conn.close()
-        return row
+        if row:
+            return {
+                'id': row[0],
+                'name': row[1],
+                'email': row[2],
+                'password_hash': row[3],
+                'role': row[4],
+                'created_at': row[5]
+            }
+        return None
 
     def change_password(self, user_id, new_password_hash):
         conn = self.get_connection()
