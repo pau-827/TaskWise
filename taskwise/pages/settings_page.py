@@ -11,6 +11,7 @@ class SettingsPage:
         S.user (dict with name/email) or None
         S.db.get_user_by_email(...)
         S.db.change_password(...)
+        S.db.get_setting(...), S.db.set_setting(...)
     """
 
     def __init__(self, state):
@@ -68,6 +69,96 @@ class SettingsPage:
                 return S._hash_pw(s)
             import hashlib
             return hashlib.sha256((s or "").encode("utf-8")).hexdigest()
+
+        def show_notification_dialog():
+            # Get current settings or defaults
+            task_due = db.get_setting("notify_task_due", True) if hasattr(db, 'get_setting') else True
+            task_created = db.get_setting("notify_task_created", True) if hasattr(db, 'get_setting') else True
+            task_completed = db.get_setting("notify_task_completed", False) if hasattr(db, 'get_setting') else False
+
+            task_due_switch = ft.Switch(value=task_due, active_color=C("BUTTON_COLOR"))
+            task_created_switch = ft.Switch(value=task_created, active_color=C("BUTTON_COLOR"))
+            task_completed_switch = ft.Switch(value=task_completed, active_color=C("BUTTON_COLOR"))
+
+            def save_notifications(e):
+                db.set_setting("notify_task_due", task_due_switch.value)
+                db.set_setting("notify_task_created", task_created_switch.value)
+                db.set_setting("notify_task_completed", task_completed_switch.value)
+                
+                dlg.open = False
+                page.snack_bar = ft.SnackBar(
+                    content=ft.Text("Notification preferences saved."), 
+                    bgcolor=C("SUCCESS_COLOR")
+                )
+                page.snack_bar.open = True
+                page.update()
+
+            notification_options = ft.Column(
+                spacing=16,
+                controls=[
+                    ft.Row(
+                        alignment=ft.MainAxisAlignment.SPACE_BETWEEN,
+                        controls=[
+                            ft.Column(
+                                spacing=2,
+                                controls=[
+                                    ft.Text("Task Due Soon", size=14, weight=ft.FontWeight.BOLD, color=C("TEXT_PRIMARY")),
+                                    ft.Text("Get notified when tasks are approaching their due date", size=11, color=C("TEXT_SECONDARY")),
+                                ],
+                            ),
+                            task_due_switch,
+                        ],
+                    ),
+                    ft.Divider(height=1, color=C("BORDER_COLOR")),
+                    ft.Row(
+                        alignment=ft.MainAxisAlignment.SPACE_BETWEEN,
+                        controls=[
+                            ft.Column(
+                                spacing=2,
+                                controls=[
+                                    ft.Text("Task Created", size=14, weight=ft.FontWeight.BOLD, color=C("TEXT_PRIMARY")),
+                                    ft.Text("Get notified when new tasks are created", size=11, color=C("TEXT_SECONDARY")),
+                                ],
+                            ),
+                            task_created_switch,
+                        ],
+                    ),
+                    ft.Divider(height=1, color=C("BORDER_COLOR")),
+                    ft.Row(
+                        alignment=ft.MainAxisAlignment.SPACE_BETWEEN,
+                        controls=[
+                            ft.Column(
+                                spacing=2,
+                                controls=[
+                                    ft.Text("Task Completed", size=14, weight=ft.FontWeight.BOLD, color=C("TEXT_PRIMARY")),
+                                    ft.Text("Get notified when tasks are marked as complete", size=11, color=C("TEXT_SECONDARY")),
+                                ],
+                            ),
+                            task_completed_switch,
+                        ],
+                    ),
+                ],
+            )
+
+            dlg = ft.AlertDialog(
+                modal=True,
+                bgcolor=C("FORM_BG"),
+                title=ft.Text("Notification Settings", weight=ft.FontWeight.BOLD, color=C("TEXT_PRIMARY")),
+                content=ft.Container(
+                    width=480,
+                    padding=8,
+                    content=notification_options,
+                ),
+                actions=[
+                    ft.TextButton("Cancel", on_click=lambda e: close_dialog(dlg)),
+                    ft.ElevatedButton("Save", on_click=save_notifications, bgcolor=C("BUTTON_COLOR"), color=ft.Colors.WHITE),
+                ],
+                actions_alignment=ft.MainAxisAlignment.END,
+                shape=ft.RoundedRectangleBorder(radius=16),
+            )
+            page.overlay.append(dlg)
+            dlg.open = True
+            page.update()
 
         def show_change_password_dialog():
             current_tf = ft.TextField(
@@ -152,6 +243,96 @@ class SettingsPage:
                 actions=[
                     ft.TextButton("Cancel", on_click=lambda e: close_dialog(dlg)),
                     ft.ElevatedButton("Save", on_click=save, bgcolor=C("BUTTON_COLOR"), color=ft.Colors.WHITE),
+                ],
+                actions_alignment=ft.MainAxisAlignment.END,
+                shape=ft.RoundedRectangleBorder(radius=16),
+            )
+            page.overlay.append(dlg)
+            dlg.open = True
+            page.update()
+
+        def show_notification_dialog():
+            # Get current settings or defaults
+            task_due = db.get_setting("notify_task_due", True) if hasattr(db, 'get_setting') else True
+            task_created = db.get_setting("notify_task_created", True) if hasattr(db, 'get_setting') else True
+            task_completed = db.get_setting("notify_task_completed", False) if hasattr(db, 'get_setting') else False
+
+            task_due_switch = ft.Switch(value=task_due, active_color=C("BUTTON_COLOR"))
+            task_created_switch = ft.Switch(value=task_created, active_color=C("BUTTON_COLOR"))
+            task_completed_switch = ft.Switch(value=task_completed, active_color=C("BUTTON_COLOR"))
+
+            def save_notifications(e):
+                db.set_setting("notify_task_due", task_due_switch.value)
+                db.set_setting("notify_task_created", task_created_switch.value)
+                db.set_setting("notify_task_completed", task_completed_switch.value)
+                
+                dlg.open = False
+                page.snack_bar = ft.SnackBar(
+                    content=ft.Text("Notification preferences saved."), 
+                    bgcolor=C("SUCCESS_COLOR")
+                )
+                page.snack_bar.open = True
+                page.update()
+
+            notification_options = ft.Column(
+                spacing=16,
+                controls=[
+                    ft.Row(
+                        alignment=ft.MainAxisAlignment.SPACE_BETWEEN,
+                        controls=[
+                            ft.Column(
+                                spacing=2,
+                                controls=[
+                                    ft.Text("Task Due Soon", size=14, weight=ft.FontWeight.BOLD, color=C("TEXT_PRIMARY")),
+                                    ft.Text("Get notified when tasks are approaching their due date", size=11, color=C("TEXT_SECONDARY")),
+                                ],
+                            ),
+                            task_due_switch,
+                        ],
+                    ),
+                    ft.Divider(height=1, color=C("BORDER_COLOR")),
+                    ft.Row(
+                        alignment=ft.MainAxisAlignment.SPACE_BETWEEN,
+                        controls=[
+                            ft.Column(
+                                spacing=2,
+                                controls=[
+                                    ft.Text("Task Created", size=14, weight=ft.FontWeight.BOLD, color=C("TEXT_PRIMARY")),
+                                    ft.Text("Get notified when new tasks are created", size=11, color=C("TEXT_SECONDARY")),
+                                ],
+                            ),
+                            task_created_switch,
+                        ],
+                    ),
+                    ft.Divider(height=1, color=C("BORDER_COLOR")),
+                    ft.Row(
+                        alignment=ft.MainAxisAlignment.SPACE_BETWEEN,
+                        controls=[
+                            ft.Column(
+                                spacing=2,
+                                controls=[
+                                    ft.Text("Task Completed", size=14, weight=ft.FontWeight.BOLD, color=C("TEXT_PRIMARY")),
+                                    ft.Text("Get notified when tasks are marked as complete", size=11, color=C("TEXT_SECONDARY")),
+                                ],
+                            ),
+                            task_completed_switch,
+                        ],
+                    ),
+                ],
+            )
+
+            dlg = ft.AlertDialog(
+                modal=True,
+                bgcolor=C("FORM_BG"),
+                title=ft.Text("Notification Settings", weight=ft.FontWeight.BOLD, color=C("TEXT_PRIMARY")),
+                content=ft.Container(
+                    width=480,
+                    padding=8,
+                    content=notification_options,
+                ),
+                actions=[
+                    ft.TextButton("Cancel", on_click=lambda e: close_dialog(dlg)),
+                    ft.ElevatedButton("Save", on_click=save_notifications, bgcolor=C("BUTTON_COLOR"), color=ft.Colors.WHITE),
                 ],
                 actions_alignment=ft.MainAxisAlignment.END,
                 shape=ft.RoundedRectangleBorder(radius=16),
@@ -285,6 +466,7 @@ class SettingsPage:
             controls=[
                 section_title("Preferences"),
                 tile(ft.Icons.PALETTE, "Theme", "Switch your look and feel", right_control=theme_dd),
+                tile(ft.Icons.NOTIFICATIONS, "Notifications", "Manage your notification preferences", on_click=lambda e: show_notification_dialog()),
                 section_title("Account"),
                 tile(ft.Icons.PERSON, "Account", "View profile information", on_click=lambda e: show_account_dialog()),
                 tile(ft.Icons.LOCK, "Change Password", "Update your login password", on_click=lambda e: show_change_password_dialog()),
@@ -361,6 +543,20 @@ class SettingsPage:
                                     controls=[
                                         ft.Icon(ft.Icons.EVENT_NOTE, color=C("BUTTON_COLOR")),
                                         ft.Text("Set due dates so tasks show on the calendar.", size=12, color=C("TEXT_PRIMARY")),
+                                    ],
+                                ),
+                                ft.Row(
+                                    spacing=10,
+                                    controls=[
+                                        ft.Icon(ft.Icons.NOTIFICATIONS_ACTIVE, color=C("BUTTON_COLOR")),
+                                        ft.Text("Enable notifications to stay on top of tasks.", size=12, color=C("TEXT_PRIMARY")),
+                                    ],
+                                ),
+                                ft.Row(
+                                    spacing=10,
+                                    controls=[
+                                        ft.Icon(ft.Icons.NOTIFICATIONS_ACTIVE, color=C("BUTTON_COLOR")),
+                                        ft.Text("Enable notifications to stay on top of tasks.", size=12, color=C("TEXT_PRIMARY")),
                                     ],
                                 ),
                             ],
