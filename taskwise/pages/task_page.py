@@ -177,6 +177,12 @@ class TaskPage:
                 page.update()
 
             def save_task(e):
+                if not S.user:
+                    page.snack_bar = ft.SnackBar(content=ft.Text("No user logged in."), bgcolor=C("ERROR_COLOR"))
+                    page.snack_bar.open = True
+                    page.update()
+                    return
+
                 title = (title_tf.value or "").strip()
                 desc = (desc_tf.value or "").strip()
                 cat = (category_dd.value or "").strip()
@@ -194,7 +200,8 @@ class TaskPage:
                     S.cal_year = picked.year
                     S.cal_month = picked.month
 
-                db.add_task(title, desc, cat, due)
+                # NEW: pass user_id
+                db.add_task(S.user["id"], title, desc, cat, due)
 
                 dialog.open = False
                 page.snack_bar = ft.SnackBar(content=ft.Text("Task added!"), bgcolor=C("SUCCESS_COLOR"))
@@ -245,7 +252,18 @@ class TaskPage:
             page.update()
 
         def show_edit_task_dialog(task_row: tuple):
-            task_id, old_title, old_desc, old_category, old_due, old_status, _ = task_row
+            # Unpack according to db.get_tasks_by_user SELECT:
+            # id, title, description, category, due_date, status, created_at, updated_at
+            (
+                task_id,
+                old_title,
+                old_desc,
+                old_category,
+                old_due,
+                old_status,
+                old_created_at,
+                old_updated_at,
+            ) = task_row
 
             title_tf = ft.TextField(
                 value=old_title,
@@ -303,6 +321,12 @@ class TaskPage:
                 page.update()
 
             def save_changes(e):
+                if not S.user:
+                    page.snack_bar = ft.SnackBar(content=ft.Text("No user logged in."), bgcolor=C("ERROR_COLOR"))
+                    page.snack_bar.open = True
+                    page.update()
+                    return
+
                 title = (title_tf.value or "").strip()
                 desc = (desc_tf.value or "").strip()
                 cat = (category_dd.value or "").strip()
@@ -320,7 +344,8 @@ class TaskPage:
                     S.cal_year = picked.year
                     S.cal_month = picked.month
 
-                db.update_task(task_id, title, desc, cat, due)
+                # NEW: include user_id in update
+                db.update_task(S.user["id"], task_id, title, desc, cat, due, old_status)
 
                 dialog.open = False
                 page.snack_bar = ft.SnackBar(content=ft.Text("Task updated!"), bgcolor=C("SUCCESS_COLOR"))
@@ -379,7 +404,11 @@ class TaskPage:
         # Task list + analytics
         # ---------------------------
         def get_filtered_tasks() -> List[tuple]:
-            tasks = db.get_all_tasks()
+            # NEW: get tasks only for current user
+            if not S.user:
+                return []
+
+            tasks = db.get_tasks_by_user(S.user["id"])
 
             current_filter = getattr(S, "current_filter", "All Tasks")
             if current_filter != "All Tasks":
@@ -403,7 +432,10 @@ class TaskPage:
             return bool(dd and dd < datetime.now().date())
 
         def build_task_card(t: tuple) -> ft.Control:
-            task_id, title, desc, category, due_date, status, created_at = t
+            # t: id, title, description, category, due_date, status, created_at, updated_at
+            task_id, title, desc, category, due_date, status, created_at, updated_at = t
+            overdue = is_overdue(due_date, status) if 'due_date' in locals() else is_overdue(due_date, status)
+            # NOTE: above line preserved for safety but will use due_date variable below
             overdue = is_overdue(due_date, status)
 
             base_bg = "white"
@@ -414,12 +446,22 @@ class TaskPage:
             cat_label = (category or "").strip() or "No Category"
 
             def toggle(e):
+                if not S.user:
+                    page.snack_bar = ft.SnackBar(content=ft.Text("No user logged in."), bgcolor=C("ERROR_COLOR"))
+                    page.snack_bar.open = True
+                    page.update()
+                    return
                 new_status = "completed" if status == "pending" else "pending"
-                db.update_task_status(task_id, new_status)
+                db.update_task_status(S.user["id"], task_id, new_status)
                 S.update()
 
             def delete(e):
-                db.delete_task(task_id)
+                if not S.user:
+                    page.snack_bar = ft.SnackBar(content=ft.Text("No user logged in."), bgcolor=C("ERROR_COLOR"))
+                    page.snack_bar.open = True
+                    page.update()
+                    return
+                db.delete_task(S.user["id"], task_id)
                 page.snack_bar = ft.SnackBar(content=ft.Text("Task deleted!"), bgcolor=C("SUCCESS_COLOR"))
                 page.snack_bar.open = True
                 S.update()
@@ -525,7 +567,18 @@ class TaskPage:
             )
 
         def build_analytics_panel() -> ft.Control:
-            tasks = db.get_all_tasks()
+            if not S.user:
+                # Empty panel if no user
+                return ft.Container(
+                    expand=True,
+                    bgcolor=C("FORM_BG"),
+                    border_radius=16,
+                    border=ft.border.all(1, C("BORDER_COLOR")),
+                    padding=16,
+                    content=ft.Text("No user logged in.", color=C("TEXT_SECONDARY")),
+                )
+
+            tasks = db.get_tasks_by_user(S.user["id"])
             total = len(tasks)
             completed = sum(1 for t in tasks if t[5] == "completed")
             today = datetime.now().date()

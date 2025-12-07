@@ -1,8 +1,9 @@
 import flet as ft
 from passlib.hash import bcrypt
-import admin
+import admin  # keep if you use it elsewhere
 import db
 from taskwise.app import run_taskwise_app
+
 
 def main(page: ft.Page):
     # ----------------------------------
@@ -20,7 +21,10 @@ def main(page: ft.Page):
 
     # Initialize SQLite DB
     db.init_db()
-    print("USING DB:", db.get_db_path())
+    try:
+        print("USING DB:", db.get_db_path())
+    except Exception:
+        pass
 
     # ----------------------------------
     # COLOR SCHEME
@@ -41,8 +45,13 @@ def main(page: ft.Page):
     # ----------------------------------
     def show_message(text: str, color="red"):
         snack = ft.SnackBar(content=ft.Text(text), bgcolor=color, duration=2000)
-        page.overlay.append(snack)
-        snack.open = True
+        # prefer page.snack_bar, but keep overlay style similar to your original code
+        try:
+            page.overlay.append(snack)
+            snack.open = True
+        except Exception:
+            page.snack_bar = snack
+            page.snack_bar.open = True
         page.update()
 
     # ----------------------------------
@@ -253,7 +262,7 @@ def main(page: ft.Page):
     def show_login_page():
         page.clean()
         page.add(login_view)
-        
+
     def show_contact_admin_page():
         from contact_admin import contact_admin_page
         page.clean()
@@ -263,7 +272,7 @@ def main(page: ft.Page):
 
     def logout(e=None):
         try:
-            db.add_log("LOGOUT", details="User logged out", user_id=page.session.get("user_id"))
+            db.add_log("LOGOUT", "User logged out", page.session.get("user_id"))
         except Exception:
             pass
         page.session.clear()
@@ -305,7 +314,16 @@ def main(page: ft.Page):
                 return
 
             pw_hash = bcrypt.hash(pw)
-            db.create_user(name, email, pw_hash)
+            created = db.create_user(name, email, pw_hash)
+            if not created:
+                show_message("Account creation failed. Try again.")
+                return
+
+            # Log signup
+            try:
+                db.add_log("Signup", f"New user: {email}", None)
+            except Exception:
+                pass
 
             show_message("Account created! You can now log in.", SUCCESS_GREEN)
             show_login_page()
@@ -371,15 +389,16 @@ def main(page: ft.Page):
 
         try:
             user = db.get_user_by_email(email)
-            print("DEBUG USER RECORD:", user)
-            print("INPUT PASSWORD:", pw)
-            print("HASH IN DB:", user["password_hash"])
-            print("VERIFY RESULT:", bcrypt.verify(pw, user["password_hash"]))
-
 
             if not user:
                 show_message("Invalid email or password.")
                 return
+
+            # Debug prints (safe now user exists)
+            # print("DEBUG USER RECORD:", user)
+            # print("INPUT PASSWORD:", pw)
+            # print("HASH IN DB:", user["password_hash"])
+            # print("VERIFY RESULT:", bcrypt.verify(pw, user["password_hash"]))
 
             # ✔ FIXED password verification
             if not bcrypt.verify(pw, user["password_hash"]):
@@ -391,6 +410,12 @@ def main(page: ft.Page):
             page.session.set("user_name", user["name"])
             page.session.set("user_role", user["role"])
 
+            # Log login
+            try:
+                db.add_log("Login", f"{user['email']} logged in", user_id=user["id"])
+            except Exception:
+                pass
+
             # ✔ ADMIN REDIRECT (fixed)
             if user["role"] == "admin":
                 print("ADMIN LOGIN → ADMIN PANEL")
@@ -399,7 +424,8 @@ def main(page: ft.Page):
 
             # ✔ USER REDIRECT (modular TaskWise)
             print("USER LOGIN → TASKWISE APP")
-            run_taskwise_app(page, on_logout=logout, user=user)
+            # pass `username` expected by TaskWiseApp as `name`
+            run_taskwise_app(page, on_logout=logout, user={"id": user["id"], "username": user["name"], "role": user["role"]})
 
         except Exception as ex:
             show_message(f"Login failed: {ex}")

@@ -1,271 +1,262 @@
-# db.py
-import os
 import sqlite3
-from typing import Optional, List, Dict, Any
+from passlib.hash import bcrypt
+from datetime import datetime
 
-# Always save the database in the same folder as this db.py file
-BASE_DIR = os.path.dirname(os.path.abspath(__file__))
-DB_PATH = os.path.join(BASE_DIR, "taskwise.db")
-
-
-def get_db_path() -> str:
-    return DB_PATH
+DB_NAME = "taskwise.db"
 
 
-def _get_conn() -> sqlite3.Connection:
-    conn = sqlite3.connect(DB_PATH)
-    conn.row_factory = sqlite3.Row
-    conn.execute("PRAGMA foreign_keys = ON;")
-    return conn
+# -------------------------------------------------------------
+# Utility
+# -------------------------------------------------------------
+def get_db_path():
+    return DB_NAME
 
 
-def init_db() -> None:
-    """Safe to call every app start. It won't recreate tables, only ensures they exist."""
-    conn = _get_conn()
-    cur = conn.cursor()
+def connect():
+    return sqlite3.connect(DB_NAME, check_same_thread=False)
 
-    # -------------------------
-    # USERS TABLE
-    # -------------------------
-    cur.execute("""
+
+# -------------------------------------------------------------
+# Database Initialization
+# -------------------------------------------------------------
+def init_db():
+    conn = connect()
+    cursor = conn.cursor()
+
+    # USERS TABLE — updated to match your UI (name + email + password_hash)
+    cursor.execute("""
         CREATE TABLE IF NOT EXISTS users (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
             name TEXT NOT NULL,
-            email TEXT NOT NULL UNIQUE,
+            email TEXT UNIQUE NOT NULL,
             password_hash TEXT NOT NULL,
-            role TEXT NOT NULL DEFAULT 'user',
-            created_at TEXT DEFAULT CURRENT_TIMESTAMP
+            role TEXT DEFAULT 'user'
         )
     """)
 
-    # -------------------------
-    # CREATE DEFAULT ADMIN ACCOUNT
-    # -------------------------
-    cur.execute("SELECT * FROM users WHERE email = 'admin@taskwise.com'")
-    if not cur.fetchone():
-        # bcrypt hash for password: admin12345
-        pw_hash = "$2b$12$LQpC0kxrlEYwOYZb0s9XhOK5d0xH3sTk20CvdPet8.7t92WjU6Cxa"
-        cur.execute("""
-            INSERT INTO users (name, email, password_hash, role)
-            VALUES ('Administrator', 'admin@taskwise.com', ?, 'admin')
-        """, (pw_hash,))
-
-    # -------------------------
-    # TASKS TABLE (scoped to user)
-    # -------------------------
-    cur.execute("""
+    # TASKS TABLE — per user
+    cursor.execute("""
         CREATE TABLE IF NOT EXISTS tasks (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
             user_id INTEGER NOT NULL,
             title TEXT NOT NULL,
-            description TEXT DEFAULT '',
-            category TEXT DEFAULT '',
-            due_date TEXT DEFAULT '',
-            status TEXT NOT NULL DEFAULT 'pending',
-            created_at TEXT DEFAULT CURRENT_TIMESTAMP,
-            updated_at TEXT DEFAULT CURRENT_TIMESTAMP,
-            FOREIGN KEY(user_id) REFERENCES users(id) ON DELETE CASCADE
+            description TEXT,
+            category TEXT,
+            due_date TEXT,
+            status TEXT DEFAULT 'pending',
+            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+            updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+            FOREIGN KEY (user_id) REFERENCES users(id)
         )
     """)
 
-    # -------------------------
-    # AUDIT LOGS TABLE (IAS)
-    # -------------------------
-    cur.execute("""
+    # PER-USER SETTINGS
+    cursor.execute("""
+        CREATE TABLE IF NOT EXISTS app_settings (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            user_id INTEGER NOT NULL,
+            key TEXT NOT NULL,
+            value TEXT,
+            UNIQUE(user_id, key),
+            FOREIGN KEY (user_id) REFERENCES users(id)
+        )
+    """)
+
+    # SYSTEM LOGS
+    cursor.execute("""
         CREATE TABLE IF NOT EXISTS logs (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
             user_id INTEGER,
             email TEXT,
             action TEXT NOT NULL,
-            details TEXT DEFAULT '',
-            created_at TEXT DEFAULT CURRENT_TIMESTAMP,
-            FOREIGN KEY(user_id) REFERENCES users(id) ON DELETE SET NULL
+            details TEXT,
+            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
         )
     """)
 
-    # Useful indexes (performance + cleaner queries)
-    cur.execute("CREATE INDEX IF NOT EXISTS idx_users_email ON users(email)")
-    cur.execute("CREATE INDEX IF NOT EXISTS idx_tasks_user_created ON tasks(user_id, created_at)")
-    cur.execute("CREATE INDEX IF NOT EXISTS idx_logs_created ON logs(created_at)")
-
     conn.commit()
+
+    # Create default admin if not exists (admin@taskwise.com)
+    cursor.execute("SELECT * FROM users WHERE email = 'admin@taskwise.com'")
+    if not cursor.fetchone():
+        cursor.execute(
+            "INSERT INTO users (name, email, password_hash, role) VALUES (?, ?, ?, ?)",
+            ("Admin", "admin@taskwise.com", bcrypt.hash("admin123"), "admin")
+        )
+        conn.commit()
+
     conn.close()
 
 
-# =========================================================
-# LOGGING (IAS)
-# =========================================================
-def add_log(action: str, details: str = "", user_id: Optional[int] = None, email: Optional[str] = None) -> None:
-    conn = _get_conn()
-    cur = conn.cursor()
-    cur.execute(
-        "INSERT INTO logs (user_id, email, action, details) VALUES (?, ?, ?, ?)",
-        (user_id, email, action, details),
+# -------------------------------------------------------------
+# User Functions
+# -------------------------------------------------------------
+def create_user(name, email, password_hash, role="user"):
+    try:
+        conn = connect()
+        cursor = conn.cursor()
+        cursor.execute(
+            "INSERT INTO users (name, email, password_hash, role) VALUES (?, ?, ?, ?)",
+            (name, email, password_hash, role)
+        )
+        conn.commit()
+        conn.close()
+        return True
+    except sqlite3.IntegrityError:
+        return False
+
+
+def get_user_by_email(email):
+    conn = connect()
+    cursor = conn.cursor()
+    cursor.execute(
+        "SELECT id, name, email, password_hash, role FROM users WHERE email = ?",
+        (email,)
     )
+    row = cursor.fetchone()
+    conn.close()
+
+    if row:
+        return {
+            "id": row[0],
+            "name": row[1],
+            "email": row[2],
+            "password_hash": row[3],
+            "role": row[4],
+        }
+    return None
+
+
+# -------------------------------------------------------------
+# Logging
+# -------------------------------------------------------------
+def add_log(action, details="", user_id=None):
+    conn = connect()
+    cursor = conn.cursor()
+
+    email = None
+    if user_id:
+        cursor.execute("SELECT email FROM users WHERE id = ?", (user_id,))
+        u = cursor.fetchone()
+        if u:
+            email = u[0]
+
+    cursor.execute("""
+        INSERT INTO logs (user_id, email, action, details)
+        VALUES (?, ?, ?, ?)
+    """, (user_id, email, action, details))
     conn.commit()
     conn.close()
 
 
-def get_logs(limit: int = 200) -> List[Dict[str, Any]]:
-    conn = _get_conn()
-    cur = conn.cursor()
-    cur.execute("""
-        SELECT id, user_id, email, action, details, created_at
-        FROM logs
+def get_logs():
+    conn = connect()
+    cursor = conn.cursor()
+    cursor.execute("""
+        SELECT id, user_id, email, action, details, created_at 
+        FROM logs 
         ORDER BY created_at DESC
-        LIMIT ?
-    """, (limit,))
-    rows = cur.fetchall()
+    """)
+    rows = cursor.fetchall()
     conn.close()
-    return [dict(r) for r in rows]
+
+    logs = []
+    for r in rows:
+        logs.append({
+            "id": r[0],
+            "user_id": r[1],
+            "email": r[2],
+            "action": r[3],
+            "details": r[4],
+            "created_at": r[5],
+        })
+    return logs
 
 
-# =========================================================
-# USERS
-# =========================================================
-def create_user(name: str, email: str, password_hash: str, role: str = "user") -> int:
-    """
-    Creates a user. Raises sqlite3.IntegrityError if email already exists.
-    Returns new user_id.
-    """
-    conn = _get_conn()
-    cur = conn.cursor()
-    cur.execute(
-        "INSERT INTO users (name, email, password_hash, role) VALUES (?, ?, ?, ?)",
-        (name, email, password_hash, role),
+# -------------------------------------------------------------
+# Task Functions (per-user isolated)
+# -------------------------------------------------------------
+def add_task(user_id, title, description="", category="", due_date=""):
+    conn = connect()
+    cursor = conn.cursor()
+    cursor.execute(
+        "INSERT INTO tasks (user_id, title, description, category, due_date) VALUES (?, ?, ?, ?, ?)",
+        (user_id, title, description, category, due_date)
     )
     conn.commit()
-    user_id = cur.lastrowid
     conn.close()
 
-    # Log after commit so user_id exists
-    add_log("SIGNUP", details=f"Account created (role={role})", user_id=user_id, email=email)
-    return user_id
 
-
-def get_user_by_email(email: str) -> Optional[Dict[str, Any]]:
-    conn = _get_conn()
-    cur = conn.cursor()
-    cur.execute("SELECT * FROM users WHERE email = ?", (email,))
-    row = cur.fetchone()
-    conn.close()
-    return dict(row) if row else None
-
-
-def get_user_by_id(user_id: int) -> Optional[Dict[str, Any]]:
-    conn = _get_conn()
-    cur = conn.cursor()
-    cur.execute("SELECT * FROM users WHERE id = ?", (user_id,))
-    row = cur.fetchone()
-    conn.close()
-    return dict(row) if row else None
-
-
-# =========================================================
-# TASKS (USER-SCOPED)
-# =========================================================
-def add_task(user_id: int, title: str, description: str = "", category: str = "", due_date: str = "") -> int:
-    conn = _get_conn()
-    cur = conn.cursor()
-    cur.execute(
-        """
-        INSERT INTO tasks (user_id, title, description, category, due_date)
-        VALUES (?, ?, ?, ?, ?)
-        """,
-        (user_id, title, description or "", category or "", due_date or ""),
-    )
-    conn.commit()
-    task_id = cur.lastrowid
-    conn.close()
-
-    add_log("TASK_ADD", details=f"Task created: id={task_id}, title={title}", user_id=user_id)
-    return task_id
-
-
-def get_tasks_by_user(user_id: int) -> List[Dict[str, Any]]:
-    conn = _get_conn()
-    cur = conn.cursor()
-    cur.execute(
-        """
-        SELECT id, title, description, category, due_date, status, created_at
+def get_tasks_by_user(user_id):
+    conn = connect()
+    cursor = conn.cursor()
+    cursor.execute("""
+        SELECT id, title, description, category, due_date, status, created_at, updated_at
         FROM tasks
         WHERE user_id = ?
         ORDER BY created_at DESC
-        """,
-        (user_id,),
+    """, (user_id,))
+    rows = cursor.fetchall()
+    conn.close()
+    return rows
+
+
+def update_task(user_id, task_id, title, description, category, due_date, status):
+    conn = connect()
+    cursor = conn.cursor()
+    cursor.execute("""
+        UPDATE tasks SET 
+            title=?, description=?, category=?, due_date=?, status=?,
+            updated_at=CURRENT_TIMESTAMP
+        WHERE id=? AND user_id=?
+    """, (title, description, category, due_date, status, task_id, user_id))
+    conn.commit()
+    conn.close()
+
+
+def update_task_status(user_id, task_id, status):
+    conn = connect()
+    cursor = conn.cursor()
+    cursor.execute("""
+        UPDATE tasks 
+        SET status=?, updated_at=CURRENT_TIMESTAMP
+        WHERE id=? AND user_id=?
+    """, (status, task_id, user_id))
+    conn.commit()
+    conn.close()
+
+
+def delete_task(user_id, task_id):
+    conn = connect()
+    cursor = conn.cursor()
+    cursor.execute("DELETE FROM tasks WHERE id=? AND user_id=?", (task_id, user_id))
+    conn.commit()
+    conn.close()
+
+
+# -------------------------------------------------------------
+# Per-User Settings (theme, preferences)
+# -------------------------------------------------------------
+def set_setting(user_id, key, value):
+    conn = connect()
+    cursor = conn.cursor()
+    cursor.execute("""
+        INSERT INTO app_settings (user_id, key, value)
+        VALUES (?, ?, ?)
+        ON CONFLICT(user_id, key)
+        DO UPDATE SET value=excluded.value
+    """, (user_id, key, value))
+    conn.commit()
+    conn.close()
+
+
+def get_setting(user_id, key, default=None):
+    conn = connect()
+    cursor = conn.cursor()
+    cursor.execute(
+        "SELECT value FROM app_settings WHERE user_id=? AND key=?",
+        (user_id, key)
     )
-    rows = cur.fetchall()
+    row = cursor.fetchone()
     conn.close()
-    return [dict(r) for r in rows]
-
-def update_user_password(email: str, new_hash: str):
-    conn = _get_conn()
-    conn.execute("UPDATE users SET password_hash=? WHERE email=?", (new_hash, email))
-    conn.commit()
-    conn.close()
-
-def update_task(
-    user_id: int,
-    task_id: int,
-    title: str,
-    description: str = "",
-    category: str = "",
-    due_date: str = ""
-) -> int:
-    conn = _get_conn()
-    cur = conn.cursor()
-    cur.execute(
-        """
-        UPDATE tasks
-        SET title = ?, description = ?, category = ?, due_date = ?, updated_at = CURRENT_TIMESTAMP
-        WHERE id = ? AND user_id = ?
-        """,
-        (title, description or "", category or "", due_date or "", task_id, user_id),
-    )
-    changed = cur.rowcount
-    conn.commit()
-    conn.close()
-
-    if changed:
-        add_log("TASK_EDIT", details=f"Task updated: id={task_id}, title={title}", user_id=user_id)
-    return changed
-
-
-def delete_task(user_id: int, task_id: int) -> int:
-    conn = _get_conn()
-    cur = conn.cursor()
-    cur.execute("DELETE FROM tasks WHERE id = ? AND user_id = ?", (task_id, user_id))
-    changed = cur.rowcount
-    conn.commit()
-    conn.close()
-
-    if changed:
-        add_log("TASK_DELETE", details=f"Task deleted: id={task_id}", user_id=user_id)
-    return changed
-
-
-def toggle_task_status(user_id: int, task_id: int) -> Optional[str]:
-    conn = _get_conn()
-    cur = conn.cursor()
-
-    cur.execute("SELECT status FROM tasks WHERE id = ? AND user_id = ?", (task_id, user_id))
-    row = cur.fetchone()
-    if not row:
-        conn.close()
-        return None
-
-    new_status = "completed" if row["status"] == "pending" else "pending"
-
-    cur.execute(
-        """
-        UPDATE tasks
-        SET status = ?, updated_at = CURRENT_TIMESTAMP
-        WHERE id = ? AND user_id = ?
-        """,
-        (new_status, task_id, user_id),
-    )
-    conn.commit()
-    conn.close()
-
-    add_log("TASK_STATUS", details=f"Task status changed: id={task_id}, status={new_status}", user_id=user_id)
-    return new_status
+    return row[0] if row else default

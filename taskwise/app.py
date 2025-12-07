@@ -12,53 +12,47 @@ class TaskWiseApp:
 
         # Shared state
         self.state = AppState()
+        self.state.set_update_callback(self.update_ui)
 
-        # APPLY LOGGED-IN USER
+        # Apply logged-in user
         if user:
-            self.state.user = {
+            self.state.on_user_login({
                 "id": user.get("id"),
-                "name": user.get("name"),
-                "email": user.get("email"),
+                "username": user.get("username"),
                 "role": user.get("role")
-            }
+            })
 
-        # Let state trigger rerenders
-        self.state._update_callback = self.update_ui
+        # PAGE OBJECTS (Option C: taskpage, calendarpage, settingspage)
+        self.taskpage = TaskPage(self.state)
+        self.calendarpage = CalendarPage(self.state)
+        self.settingspage = SettingsPage(self.state)
 
-        # Page modules
-        self.task_page = TaskPage(self.state)
-        self.calendar_page = CalendarPage(self.state)
-        self.settings_page = SettingsPage(self.state)
+        # Set default view
+        self.state.current_view = "taskpage"
 
         # Initial render
         self.update_ui()
 
     # ----------------------------
-    # Header (shared on all pages)
+    # Shared Header
     # ----------------------------
     def _header(self) -> ft.Control:
         C = self.state.colors
 
         def go(view_name: str):
-            self.state.current_view = view_name
-            self.state.update()
+            self.state.go(view_name)
 
         def do_logout(e):
-            # Clear state
-            self.state.user = None
-
-            # Show logout snackbar (optional)
+            self.state.on_user_logout()
             self.page.snack_bar = ft.SnackBar(
                 content=ft.Text("Logged out."),
                 bgcolor=C["SUCCESS_COLOR"]
             )
             self.page.snack_bar.open = True
             self.page.update()
-
-            # EXIT the TaskWise UI and go back to login (handled by main.py)
             self.on_logout()
 
-        # Tabs
+        # Navigation button
         def nav_button(label: str, view_name: str):
             active = self.state.current_view == view_name
             text = f"✱ {label} ✱" if active else label
@@ -68,10 +62,12 @@ class TaskWiseApp:
                 style=ft.ButtonStyle(color=C["TEXT_PRIMARY"]),
             )
 
-        # Profile UI (username beside icon + dropdown)
+        # User area
         if self.state.user:
+            username = self.state.user.get("username", "")
+
             user_label = ft.Text(
-                self.state.user.get("name", ""),
+                username,
                 size=12,
                 weight=ft.FontWeight.BOLD,
                 color=C["TEXT_PRIMARY"]
@@ -79,20 +75,11 @@ class TaskWiseApp:
             profile_menu = ft.PopupMenuButton(
                 icon=ft.Icons.ACCOUNT_CIRCLE,
                 icon_color=C["TEXT_PRIMARY"],
-                items=[
-                    ft.PopupMenuItem(text="Logout", on_click=do_logout),
-                ],
+                items=[ft.PopupMenuItem(text="Logout", on_click=do_logout)],
             )
             right = ft.Row([user_label, profile_menu], spacing=8)
         else:
-            profile_menu = ft.PopupMenuButton(
-                icon=ft.Icons.ACCOUNT_CIRCLE,
-                icon_color=C["TEXT_PRIMARY"],
-                items=[
-                    ft.PopupMenuItem(text="Logout", on_click=do_logout),
-                ],
-            )
-            right = ft.Row([profile_menu], spacing=8)
+            right = ft.Row([ft.Text("Guest", size=12, color=C["TEXT_PRIMARY"])])
 
         return ft.Container(
             bgcolor=C["HEADER_BG"],
@@ -100,12 +87,17 @@ class TaskWiseApp:
             padding=ft.padding.symmetric(horizontal=24, vertical=12),
             content=ft.Row(
                 [
-                    ft.Text("TaskWise", size=18, weight=ft.FontWeight.BOLD, color=C["TEXT_PRIMARY"]),
+                    ft.Text(
+                        "TaskWise",
+                        size=18,
+                        weight=ft.FontWeight.BOLD,
+                        color=C["TEXT_PRIMARY"]
+                    ),
                     ft.Row(
                         [
-                            nav_button("Tasks", "tasks"),
-                            nav_button("Calendar", "calendar"),
-                            nav_button("Settings", "settings"),
+                            nav_button("Tasks", "taskpage"),
+                            nav_button("Calendar", "calendarpage"),
+                            nav_button("Settings", "settingspage"),
                         ],
                         spacing=10,
                     ),
@@ -117,10 +109,9 @@ class TaskWiseApp:
         )
 
     # ---------------------------------------------------------
-    # MAIN ROUTER / RENDERER
+    # MAIN ROUTER
     # ---------------------------------------------------------
     def update_ui(self):
-        """Switch UI based on state.current_view."""
         C = self.state.colors
 
         self.page.clean()
@@ -128,16 +119,15 @@ class TaskWiseApp:
 
         view = self.state.current_view
 
-        if view == "tasks":
-            body = self.task_page.view(self.page)
-        elif view == "calendar":
-            body = self.calendar_page.view(self.page)
-        elif view == "settings":
-            body = self.settings_page.view(self.page)
+        if view == "taskpage":
+            body = self.taskpage.view(self.page)
+        elif view == "calendarpage":
+            body = self.calendarpage.view(self.page)
+        elif view == "settingspage":
+            body = self.settingspage.view(self.page)
         else:
             body = ft.Text(f"Unknown page: {view}", color="red")
 
-        # Main shell with centered/maximized spacing like your wireframes
         shell = ft.Container(
             expand=True,
             alignment=ft.alignment.center,
@@ -172,7 +162,7 @@ class TaskWiseApp:
 
 
 # -------------------------------------------------------------
-# ENTRY POINT FOR MAIN.PY TO START THE ROUTER
+# ENTRY POINT FOR MAIN.PY
 # -------------------------------------------------------------
 def run_taskwise_app(page: ft.Page, on_logout, user=None):
     page.title = "TaskWise"

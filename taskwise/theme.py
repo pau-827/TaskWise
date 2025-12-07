@@ -1,4 +1,6 @@
 # taskwise/theme.py
+
+# Central theme registry
 THEMES = {
     "Light Mode": {
         "BG_COLOR": "#F8F6F4",
@@ -35,4 +37,23 @@ THEMES = {
     },
 }
 
+
+# ------------------------------
+# Safe theme access helper
+# ------------------------------
+def get_theme(name: str):
+    """
+    Returns a *copy* of the theme so the app cannot accidentally
+    mutate the original theme dictionary.
+    Falls back to Light Mode if missing.
+    """
+    base = THEMES.get(name)
+    if not base:
+        base = THEMES["Light Mode"]
+
+    # Return a copy to ensure immutability from the outside
+    return base.copy()
+
+
+# Task categories for dropdowns, filters, etc.
 CATEGORIES = ["Personal", "Work", "Study", "Bills", "Others"]

@@ -1,42 +1,49 @@
 # taskwise/app_state.py
+import db
 from datetime import datetime
-from taskwise.database import Database
-from taskwise.theme import THEMES
+from taskwise.theme import get_theme, THEMES
 
 
 class AppState:
     """
     Shared application state. Pages receive an AppState instance
     and use it for DB access, theme colors, user, calendar state, etc.
+
+    Important:
+      - Call app_state.on_user_login(user_dict) after successful login
+        where user_dict is {"id": ..., "username": ..., "role": ...}
+      - Call app_state.on_user_logout() on logout.
     """
 
     def __init__(self):
-        self.db = Database()
+        # db is the module; functions are called like:
+        # db.get_setting(user_id, key, default)
+        self.db = db
 
-        # theme
-        saved_theme = self.db.get_setting("theme_name", "Light Mode")
-        if saved_theme not in THEMES:
-            saved_theme = "Light Mode"
-        self.theme_name = saved_theme
-        self.colors = THEMES[self.theme_name].copy()
+        # Default theme before login
+        self.theme_name = "Light Mode"
+        self.colors = get_theme(self.theme_name)
 
-        # auth
-        self.user = None  # dict: {"id","name","email"}
+        # Auth
+        self.user = None  # dict: {"id","username","role"}
 
         # UI navigation
         self.current_view = "tasks"
         self.current_filter = "All Tasks"
 
-        # calendar
+        # Calendar
         today = datetime.now().date()
         self.selected_date = today
         self.cal_year = today.year
         self.cal_month = today.month
         self.holidays_cache = {}
 
-        # callback used by app.py to re-render
+        # update() callback (set by TaskWiseApp)
         self._update_callback = None
 
+    # -----------------------
+    # update/render helpers
+    # -----------------------
     def set_update_callback(self, fn):
         self._update_callback = fn
 
@@ -49,10 +56,57 @@ class AppState:
         self.current_view = view_name
         self.update()
 
+    # -----------------------
+    # login/logout helpers
+    # -----------------------
+    def on_user_login(self, user: dict):
+        """
+        Call this when the user successfully logs in.
+        user should be a dict returned by db.login_user, e.g. {"id":1, "username":"bob", "role":"user"}
+        """
+        self.user = user
+
+        # Load per-user theme
+        try:
+            saved_theme = self.db.get_setting(self.user["id"], "theme_name", "Light Mode")
+        except Exception:
+            saved_theme = "Light Mode"
+
+        # Fallback if theme no longer exists
+        if saved_theme not in THEMES:
+            saved_theme = "Light Mode"
+
+        self.theme_name = saved_theme
+        self.colors = get_theme(saved_theme)
+
+        self.update()
+
+    def on_user_logout(self):
+        """Reset all user-specific state."""
+        self.user = None
+
+        self.theme_name = "Light Mode"
+        self.colors = get_theme("Light Mode")
+
+        self.update()
+
+    # -----------------------
+    # theme/settings helpers
+    # -----------------------
     def set_theme(self, theme_name: str):
+        """Change theme in memory and persist per-user if logged in."""
+
         if theme_name not in THEMES:
             theme_name = "Light Mode"
+
         self.theme_name = theme_name
-        self.colors = THEMES[theme_name].copy()
-        self.db.set_setting("theme_name", theme_name)
+        self.colors = get_theme(theme_name)
+
+        # Persist to DB only if logged in
+        if self.user:
+            try:
+                self.db.set_setting(self.user["id"], "theme_name", theme_name)
+            except Exception:
+                pass  # Silent fail — we don't want the UI to crash
+
         self.update()
