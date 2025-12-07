@@ -22,7 +22,12 @@ class FakeDB:
             if user[0] == user_id:
                 self.users[email] = (user_id, user[1], email, new_hash)
 
+    def get_setting(self, key, default=None):
+        """Get a setting value"""
+        return self.settings.get(key, default)
+
     def set_setting(self, key, value):
+        """Set a setting value"""
         self.settings[key] = value
         print("Saved setting:", key, value)
 
@@ -40,6 +45,17 @@ class FakeState:
         self.current_view = "settings"
 
         self._update_callback = None
+
+    def set_theme(self, theme_name):
+        """Set the theme"""
+        self.theme_name = theme_name
+        if theme_name in THEMES:
+            self.colors = THEMES[theme_name].copy()
+            print(f"Theme changed to: {theme_name}")
+
+    def update(self):
+        """Trigger UI update"""
+        print("State update called")
 
     def go(self, view_name):
         print("Switch to:", view_name)
