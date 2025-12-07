@@ -6,12 +6,21 @@ from taskwise.pages.settings_page import SettingsPage
 
 
 class TaskWiseApp:
-    def __init__(self, page: ft.Page, on_logout):
+    def __init__(self, page: ft.Page, on_logout, user=None):
         self.page = page
         self.on_logout = on_logout
 
         # Shared state
         self.state = AppState()
+
+        # APPLY LOGGED-IN USER
+        if user:
+            self.state.user = {
+                "id": user.get("id"),
+                "name": user.get("name"),
+                "email": user.get("email"),
+                "role": user.get("role")
+            }
 
         # Let state trigger rerenders
         self.state._update_callback = self.update_ui
@@ -165,10 +174,10 @@ class TaskWiseApp:
 # -------------------------------------------------------------
 # ENTRY POINT FOR MAIN.PY TO START THE ROUTER
 # -------------------------------------------------------------
-def run_taskwise_app(page: ft.Page, on_logout):
+def run_taskwise_app(page: ft.Page, on_logout, user=None):
     page.title = "TaskWise"
     page.window_maximized = True
     page.theme_mode = ft.ThemeMode.LIGHT
     page.padding = 0
 
-    TaskWiseApp(page, on_logout)
+    TaskWiseApp(page, on_logout, user=user)

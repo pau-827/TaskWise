@@ -394,7 +394,7 @@ def main(page: ft.Page):
 
             # ✔ USER REDIRECT (modular TaskWise)
             print("USER LOGIN → TASKWISE APP")
-            run_taskwise_app(page, on_logout=logout)
+            run_taskwise_app(page, on_logout=logout, user=user)
 
         except Exception as ex:
             show_message(f"Login failed: {ex}")
