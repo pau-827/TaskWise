@@ -1,9 +1,8 @@
 import flet as ft
 from passlib.hash import bcrypt
-import admin  # kept since it's in your project
+import admin
 import db
 from taskwise.app import run_taskwise_app
-
 
 def main(page: ft.Page):
     # ----------------------------------
@@ -35,7 +34,7 @@ def main(page: ft.Page):
     SECONDARY_TEXT = "#6B8F97"
     SUCCESS_GREEN = "#4CAF50"
 
-    ADMIN_EMAIL = "admin@taskwise.com"  # change to your real admin email
+    ADMIN_EMAIL = "admin@taskwise.com"
 
     # ----------------------------------
     # SNACKBAR
@@ -212,7 +211,6 @@ def main(page: ft.Page):
     # (prevents landing UI settings from breaking task_page)
     # ----------------------------------
     def switch_to_taskwise_app():
-        # If your TaskWise app uses routing/views, clear them.
         try:
             page.views.clear()
         except Exception:
@@ -255,6 +253,13 @@ def main(page: ft.Page):
     def show_login_page():
         page.clean()
         page.add(login_view)
+        
+    def show_contact_admin_page():
+        from contact_admin import contact_admin_page
+        page.clean()
+        ui = contact_admin_page(page, go_back_callback=show_front_page)
+        page.add(ui)
+        page.update()
 
     def logout(e=None):
         try:
@@ -609,7 +614,7 @@ def main(page: ft.Page):
                                                                 spacing=14,
                                                                 controls=[
                                                                     hover_button("Create Account", True, lambda e: show_signup_page()),
-                                                                    hover_button("Contact Admin", False, show_contact_admin_dialog),
+                                                                    hover_button("Contact Admin", False, lambda e: show_contact_admin_page()),
                                                                 ],
                                                             ),
                                                             ft.Text(
@@ -903,4 +908,4 @@ def main(page: ft.Page):
     show_front_page()
 
 
-ft.app(target=main)
+ft.app(target=main, assets_dir="assets")
