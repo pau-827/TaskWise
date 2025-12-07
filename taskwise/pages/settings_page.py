@@ -552,13 +552,6 @@ class SettingsPage:
                                         ft.Text("Enable notifications to stay on top of tasks.", size=12, color=C("TEXT_PRIMARY")),
                                     ],
                                 ),
-                                ft.Row(
-                                    spacing=10,
-                                    controls=[
-                                        ft.Icon(ft.Icons.NOTIFICATIONS_ACTIVE, color=C("BUTTON_COLOR")),
-                                        ft.Text("Enable notifications to stay on top of tasks.", size=12, color=C("TEXT_PRIMARY")),
-                                    ],
-                                ),
                             ],
                         ),
                     ),
