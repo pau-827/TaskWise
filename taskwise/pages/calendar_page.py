@@ -1,18 +1,10 @@
 # taskwise/pages/calendar_page.py
 import flet as ft
 from datetime import date, datetime, timedelta
+from typing import Optional, Tuple
 
 
 class CalendarPage:
-    """
-    Calendar (maximized + PH holidays)
-    - No header here (app.py already renders header).
-    - Uses shared AppState:
-        S.selected_date (date)
-        S.cal_year / S.cal_month
-        S.db.get_all_tasks() (uses due_date)
-    - Philippine holidays (English) are computed locally (no web, no extra DB needed).
-    """
 
     def __init__(self, state):
         self.S = state
@@ -24,47 +16,66 @@ class CalendarPage:
         def C(k: str) -> str:
             return S.colors.get(k, "#000000")
 
+        TODAY = datetime.now().date()
+
         # ---------------------------
-        # Date helpers
+        # Helpers: date/time parsing
         # ---------------------------
         def fmt_date(d: date) -> str:
             return d.strftime("%Y-%m-%d")
 
-        def safe_parse(s: str):
+        def pretty_long(d: date) -> str:
+            return d.strftime("%B %d, %Y")
+
+        def safe_parse_date(s: str) -> Optional[date]:
             try:
                 s = (s or "").strip()
-                return datetime.strptime(s, "%Y-%m-%d").date() if s else None
+                if not s:
+                    return None
+                return datetime.strptime(s.split()[0], "%Y-%m-%d").date()
             except Exception:
                 return None
 
-        def weekday_sun0(d: date) -> int:
-            return (d.weekday() + 1) % 7  # Sunday=0..Saturday=6
+        def safe_parse_time(s: str) -> Optional[Tuple[int, int]]:
+            try:
+                s = (s or "").strip()
+                if not s:
+                    return None
+                parts = s.split()
+                if len(parts) < 2:
+                    return None
+                hh, mm = parts[1].split(":")
+                return int(hh), int(mm)
+            except Exception:
+                return None
+
+        def due_date_only(due_str: str) -> str:
+            d = safe_parse_date(due_str)
+            return fmt_date(d) if d else ""
 
         def days_in_month(y: int, m: int) -> int:
             if m == 12:
                 return 31
             return (date(y, m + 1, 1) - date(y, m, 1)).days
 
+        def weekday_sun0(d: date) -> int:
+            return (d.weekday() + 1) % 7  # Sunday=0..Saturday=6
+
         def month_abbr(m: int) -> str:
             return ["JAN", "FEB", "MAR", "APR", "MAY", "JUN", "JUL", "AUG", "SEP", "OCT", "NOV", "DEC"][m - 1]
-
-        def pretty_long(d: date) -> str:
-            return d.strftime("%B %d, %Y")
 
         # ---------------------------
         # Normalize shared state
         # ---------------------------
-        if isinstance(S.selected_date, str):
-            S.selected_date = safe_parse(S.selected_date) or datetime.now().date()
+        if isinstance(getattr(S, "selected_date", None), str):
+            S.selected_date = safe_parse_date(S.selected_date) or TODAY
 
-        if not isinstance(S.selected_date, date):
-            S.selected_date = datetime.now().date()
+        if not isinstance(getattr(S, "selected_date", None), date):
+            S.selected_date = TODAY
 
         if not getattr(S, "cal_year", None) or not getattr(S, "cal_month", None):
             S.cal_year = S.selected_date.year
             S.cal_month = S.selected_date.month
-
-        TODAY = datetime.now().date()
 
         # ---------------------------
         # PH Holidays (English)
@@ -118,7 +129,6 @@ class CalendarPage:
             hol[fmt_date(easter - timedelta(days=3))] = "Maundy Thursday"
             hol[fmt_date(easter - timedelta(days=2))] = "Good Friday"
             hol[fmt_date(easter - timedelta(days=1))] = "Black Saturday"
-
             return hol
 
         holidays = ph_holidays_for_year(S.cal_year)
@@ -127,42 +137,63 @@ class CalendarPage:
             return holidays.get(fmt_date(d), "")
 
         # ---------------------------
-        # Task helpers
+        # DB Tasks (user-safe)
         # ---------------------------
         def all_tasks():
-            return db.get_all_tasks()
+            try:
+                return db.get_all_tasks(S.user["id"])
+            except TypeError:
+                return db.get_all_tasks()
 
-        def build_due_set(y: int, m: int) -> set:
-            result = set()
+        def build_due_set(y: int, m: int) -> set[str]:
+            out = set()
             for t in all_tasks():
-                dd = safe_parse((t[4] or "").strip())
-                if dd and dd.year == y and dd.month == m:
-                    result.add(fmt_date(dd))
-            return result
+                d = safe_parse_date((t[4] or "").strip())
+                if d and d.year == y and d.month == m:
+                    out.add(fmt_date(d))
+            return out
 
         def tasks_for_date(d: date):
             ds = fmt_date(d)
             out = []
             for t in all_tasks():
-                if (t[4] or "").strip() == ds:
+                due = (t[4] or "").strip()
+                if due_date_only(due) == ds:
                     out.append(t)
+
+            def sort_key(tr):
+                tm = safe_parse_time((tr[4] or "").strip())
+                return tm if tm else (99, 99)
+
+            out.sort(key=sort_key)
             return out
 
         def num_tasks_for_month(y: int, m: int) -> int:
             n = 0
             for t in all_tasks():
-                dd = safe_parse((t[4] or "").strip())
-                if dd and dd.year == y and dd.month == m:
+                d = safe_parse_date((t[4] or "").strip())
+                if d and d.year == y and d.month == m:
                     n += 1
             return n
 
         def num_holidays_for_month(y: int, m: int) -> int:
             n = 0
             for k in holidays.keys():
-                dd = safe_parse(k)
+                dd = safe_parse_date(k)
                 if dd and dd.year == y and dd.month == m:
                     n += 1
             return n
+
+        # ---------------------------
+        # Relative label
+        # ---------------------------
+        def relative_label(target: date) -> str:
+            diff = (target - TODAY).days
+            if diff == 0:
+                return "Today"
+            if diff > 0:
+                return f"{diff} day(s) left"
+            return f"{abs(diff)} day(s) ago"
 
         # ---------------------------
         # Refresh
@@ -191,22 +222,20 @@ class CalendarPage:
                 S.cal_month += 1
             refresh()
 
-        def go_today(e=None):
-            S.selected_date = TODAY
-            S.cal_year = TODAY.year
-            S.cal_month = TODAY.month
-            refresh()
-
         # ---------------------------
-        # Small UI helpers
+        # UI helpers (visibility)
         # ---------------------------
-        def pill(text: str, bgcolor: str, fg: str = "white"):
+        def pill(text: str, bgcolor: str, fg: str = "white", border_color: Optional[str] = None):
             return ft.Container(
                 padding=ft.padding.symmetric(horizontal=12, vertical=7),
                 border_radius=999,
                 bgcolor=bgcolor,
-                content=ft.Text(text, size=11, color=fg, weight=ft.FontWeight.W_600),
+                border=ft.border.all(1, border_color) if border_color else None,
+                content=ft.Text(text, size=11, color=fg, weight=ft.FontWeight.W_700),
             )
+
+        def pill_light(text: str):
+            return pill(text, bgcolor="white", fg=C("TEXT_PRIMARY"), border_color=C("BORDER_COLOR"))
 
         def mini_stat(label: str, value: str, icon):
             return ft.Container(
@@ -237,7 +266,7 @@ class CalendarPage:
             )
 
         # ---------------------------
-        # Calendar grid (modern)
+        # Calendar grid (NO ink ripple)
         # ---------------------------
         def select_day(d: date):
             S.selected_date = d
@@ -250,12 +279,9 @@ class CalendarPage:
             first = date(y, m, 1)
             dim = days_in_month(y, m)
             start_col = weekday_sun0(first)
-
             due_set = build_due_set(y, m)
 
             weekday_labels = ["SUN", "MON", "TUE", "WED", "THU", "FRI", "SAT"]
-
-            # slightly bigger cells
             cell = 48
 
             header_row = ft.Row(
@@ -285,40 +311,44 @@ class CalendarPage:
                 has_task = ds in due_set
                 is_holiday = bool(hol)
 
-                # styling
                 bg = "white"
                 border_col = C("BORDER_COLOR")
                 num_col = C("TEXT_PRIMARY")
 
+                if is_today and not is_selected:
+                    bg = ft.Colors.with_opacity(0.16, C("BUTTON_COLOR"))
+
                 if is_selected:
                     bg = C("BUTTON_COLOR")
-                    num_col = "white"
                     border_col = C("BUTTON_COLOR")
-                elif is_today:
-                    bg = ft.Colors.with_opacity(0.12, C("BUTTON_COLOR"))
+                    num_col = "white"
                 elif is_holiday:
                     bg = ft.Colors.with_opacity(0.10, C("ERROR_COLOR"))
                 elif has_task:
                     bg = ft.Colors.with_opacity(0.10, C("SUCCESS_COLOR"))
 
-                # clean indicators
                 indicators = ft.Row(
                     alignment=ft.MainAxisAlignment.CENTER,
                     spacing=6,
                     controls=[
-                        ft.Container(width=7, height=7, border_radius=99, bgcolor=C("ERROR_COLOR")) if is_holiday else ft.Container(width=7, height=7),
-                        ft.Container(width=7, height=7, border_radius=99, bgcolor=C("SUCCESS_COLOR")) if has_task else ft.Container(width=7, height=7),
+                        ft.Container(width=7, height=7, border_radius=99, bgcolor=C("ERROR_COLOR"))
+                        if is_holiday
+                        else ft.Container(width=7, height=7),
+                        ft.Container(width=7, height=7, border_radius=99, bgcolor=C("SUCCESS_COLOR"))
+                        if has_task
+                        else ft.Container(width=7, height=7),
                     ],
                 )
+
+                outline = ft.border.all(2, C("BUTTON_COLOR")) if is_today and not is_selected else ft.border.all(1, border_col)
 
                 cells.append(
                     ft.Container(
                         width=cell,
                         height=cell,
                         border_radius=12,
-                        border=ft.border.all(1, border_col),
+                        border=outline,
                         bgcolor=bg,
-                        ink=True,
                         on_click=lambda e, dd=d: select_day(dd),
                         content=ft.Column(
                             expand=True,
@@ -335,7 +365,6 @@ class CalendarPage:
                     )
                 )
 
-            # chunk into weeks
             rows = []
             row = []
             for c in cells:
@@ -351,7 +380,7 @@ class CalendarPage:
             return ft.Column([header_row, ft.Container(height=8)] + rows, spacing=8)
 
         # ---------------------------
-        # Left panel (date + stats + tasks)
+        # Left panel
         # ---------------------------
         def build_left_panel():
             d = S.selected_date
@@ -374,14 +403,14 @@ class CalendarPage:
                             alignment=ft.MainAxisAlignment.SPACE_BETWEEN,
                             controls=[
                                 ft.Text(pretty_long(d), size=18, weight=ft.FontWeight.BOLD, color=C("TEXT_PRIMARY")),
-                                ft.TextButton("Today", on_click=go_today),
+                                pill_light(relative_label(d)),
                             ],
                         ),
                         ft.Row(
                             spacing=10,
                             controls=[
-                                pill(hol if hol else "No holiday", bgcolor=C("TEXT_PRIMARY")),
-                                pill(f"{len(items)} task(s)", bgcolor=C("BUTTON_COLOR")),
+                                pill(hol if hol else "No holiday", bgcolor=C("TEXT_PRIMARY"), fg="white"),
+                                pill(f"{len(items)} task(s)", bgcolor=C("BUTTON_COLOR"), fg="white"),
                             ],
                         ),
                         ft.Row(
@@ -397,12 +426,18 @@ class CalendarPage:
             )
 
             def status_chip(status: str):
-                if status == "completed":
-                    return pill("Completed", bgcolor=C("SUCCESS_COLOR"))
-                return pill("Pending", bgcolor=C("BUTTON_COLOR"))
+                if (status or "").strip().lower() == "completed":
+                    return pill("Completed", bgcolor=C("SUCCESS_COLOR"), fg="white")
+                return pill("Pending", bgcolor=C("BUTTON_COLOR"), fg="white")
 
             def category_chip(cat: str):
-                return pill((cat or "None").strip(), bgcolor=C("TEXT_PRIMARY"))
+                return pill((cat or "None").strip(), bgcolor=C("TEXT_PRIMARY"), fg="white")
+
+            def due_chip(due: str):
+                due = (due or "").strip()
+                if not due:
+                    return pill_light("No due date")
+                return pill_light(f"Due {due}")
 
             if not items:
                 list_area = ft.Container(
@@ -437,15 +472,14 @@ class CalendarPage:
                                 spacing=8,
                                 controls=[
                                     ft.Text(title, size=13, weight=ft.FontWeight.BOLD, color=C("TEXT_PRIMARY")),
-                                    ft.Text((desc or "No description").strip() or "No description", size=11, color=C("TEXT_SECONDARY"), max_lines=2, overflow=ft.TextOverflow.ELLIPSIS),
-                                    ft.Row(
-                                        spacing=8,
-                                        controls=[
-                                            category_chip(cat),
-                                            status_chip(status),
-                                            pill(due if due else "No due date", bgcolor=C("BORDER_COLOR"), fg=C("TEXT_PRIMARY")),
-                                        ],
+                                    ft.Text(
+                                        (desc or "No description").strip() or "No description",
+                                        size=11,
+                                        color=C("TEXT_SECONDARY"),
+                                        max_lines=2,
+                                        overflow=ft.TextOverflow.ELLIPSIS,
                                     ),
+                                    ft.Row(spacing=8, controls=[category_chip(cat), status_chip(status), due_chip(due)]),
                                 ],
                             ),
                         )
@@ -474,7 +508,6 @@ class CalendarPage:
                             alignment=ft.MainAxisAlignment.SPACE_BETWEEN,
                             controls=[
                                 ft.Text("Calendar", size=20, weight=ft.FontWeight.BOLD, color=C("TEXT_PRIMARY")),
-                                pill("Selected", bgcolor=C("BUTTON_COLOR")),
                             ],
                         ),
                         header_block,
@@ -485,11 +518,10 @@ class CalendarPage:
             )
 
         # ---------------------------
-        # Right panel (month selector + big calendar)
+        # Right panel
         # ---------------------------
         def build_right_panel():
             y, m = S.cal_year, S.cal_month
-            due_set = build_due_set(y, m)
             tasks_month = num_tasks_for_month(y, m)
 
             top_bar = ft.Container(
@@ -506,7 +538,7 @@ class CalendarPage:
                             controls=[
                                 ft.Text(month_abbr(m), size=13, weight=ft.FontWeight.BOLD, color="white"),
                                 ft.Text(str(y), size=13, weight=ft.FontWeight.BOLD, color="white"),
-                                pill(f"{tasks_month} due", bgcolor=ft.Colors.with_opacity(0.20, ft.Colors.WHITE)),
+                                pill(f"{tasks_month} due", bgcolor=ft.Colors.with_opacity(0.20, ft.Colors.WHITE), fg="white"),
                             ],
                         ),
                         ft.IconButton(icon=ft.Icons.CHEVRON_RIGHT, icon_color="white", on_click=next_month),
@@ -525,27 +557,14 @@ class CalendarPage:
 
             legend = ft.Row(
                 [
-                    ft.Row(
-                        [
-                            ft.Container(width=10, height=10, border_radius=99, bgcolor=C("ERROR_COLOR")),
-                            ft.Text("Holiday", size=11, color=C("TEXT_SECONDARY")),
-                        ],
-                        spacing=8,
-                    ),
-                    ft.Row(
-                        [
-                            ft.Container(width=10, height=10, border_radius=99, bgcolor=C("SUCCESS_COLOR")),
-                            ft.Text("Has Tasks", size=11, color=C("TEXT_SECONDARY")),
-                        ],
-                        spacing=8,
-                    ),
-                    ft.Row(
-                        [
-                            ft.Container(width=10, height=10, border_radius=99, bgcolor=C("BUTTON_COLOR")),
-                            ft.Text("Selected", size=11, color=C("TEXT_SECONDARY")),
-                        ],
-                        spacing=8,
-                    ),
+                    ft.Row([ft.Container(width=10, height=10, border_radius=99, bgcolor=C("ERROR_COLOR")),
+                            ft.Text("Holiday", size=11, color=C("TEXT_SECONDARY"))], spacing=8),
+                    ft.Row([ft.Container(width=10, height=10, border_radius=99, bgcolor=C("SUCCESS_COLOR")),
+                            ft.Text("Has Tasks", size=11, color=C("TEXT_SECONDARY"))], spacing=8),
+                    ft.Row([ft.Container(width=10, height=10, border_radius=99, bgcolor=C("BUTTON_COLOR")),
+                            ft.Text("Selected", size=11, color=C("TEXT_SECONDARY"))], spacing=8),
+                    ft.Row([ft.Container(width=10, height=10, border_radius=99, bgcolor="white", border=ft.border.all(2, C("BUTTON_COLOR"))),
+                            ft.Text("Today", size=11, color=C("TEXT_SECONDARY"))], spacing=8),
                 ],
                 spacing=18,
                 alignment=ft.MainAxisAlignment.CENTER,
@@ -566,7 +585,7 @@ class CalendarPage:
                             alignment=ft.MainAxisAlignment.SPACE_BETWEEN,
                             controls=[
                                 ft.Text("Month View", size=13, weight=ft.FontWeight.BOLD, color=C("TEXT_PRIMARY")),
-                                pill(pretty_long(S.selected_date), bgcolor=C("TEXT_PRIMARY")),
+                                pill(pretty_long(S.selected_date), bgcolor=C("TEXT_PRIMARY"), fg="white"),
                             ],
                         ),
                         grid,
@@ -575,9 +594,6 @@ class CalendarPage:
                 ),
             )
 
-        # ---------------------------
-        # Board
-        # ---------------------------
         board = ft.Container(
             expand=True,
             border_radius=22,
