@@ -1,12 +1,18 @@
 import flet as ft
 from datetime import date, datetime, timedelta
 from typing import Optional, Tuple
+from zoneinfo import ZoneInfo
+import json
+import urllib.request
+import urllib.error
 
 
 class CalendarPage:
 
     def __init__(self, state):
         self.S = state
+        # cache for API holidays per year
+        self._holiday_cache: dict[int, dict[str, str]] = {}
 
     def view(self, page: ft.Page):
         S = self.S
@@ -18,7 +24,8 @@ class CalendarPage:
         def C(k: str) -> str:
             return S.colors.get(k, "#000000")
 
-        TODAY = datetime.now().date()
+        # PH realtime date (Asia/Manila)
+        TODAY = datetime.now(ZoneInfo("Asia/Manila")).date()
 
         # -----------------------------------------------------
         # DATE HELPERS
@@ -83,56 +90,40 @@ class CalendarPage:
             S.cal_month = S.selected_date.month
 
         # -----------------------------------------------------
-        # PH HOLIDAYS
+        # PH HOLIDAYS (API-BASED, ENGLISH NAMES)
         # -----------------------------------------------------
-        def easter_sunday(y: int) -> date:
-            a = y % 19
-            b = y // 100
-            c = y % 100
-            d = b // 4
-            e = b % 4
-            f = (b + 8) // 25
-            g = (b - f + 1) // 3
-            h = (19 * a + b - d - g + 15) % 30
-            i = c // 4
-            k = c % 4
-            l = (32 + 2 * e + 2 * i - h - k) % 7
-            m = (a + 11 * h + 22 * l) // 451
-            month = (h + l - 7 * m + 114) // 31
-            day = ((h + l - 7 * m + 114) % 31) + 1
-            return date(y, month, day)
-
-        def last_monday(y: int, m: int) -> date:
-            d = date(y, m, days_in_month(y, m))
-            while d.weekday() != 0:
-                d -= timedelta(days=1)
-            return d
-
         def ph_holidays_for_year(y: int) -> dict[str, str]:
-            hol = {}
+            # cached
+            if y in self._holiday_cache:
+                return self._holiday_cache[y]
 
-            def add(mm: int, dd: int, name: str):
-                hol[fmt_date(date(y, mm, dd))] = name
+            url = f"https://date.nager.at/api/v3/PublicHolidays/{y}/PH"
+            hol: dict[str, str] = {}
 
-            add(1, 1, "New Year's Day")
-            add(4, 9, "Araw ng Kagitingan (Day of Valor)")
-            add(5, 1, "Labor Day")
-            add(6, 12, "Independence Day")
-            add(8, 21, "Ninoy Aquino Day")
-            hol[fmt_date(last_monday(y, 8))] = "National Heroes Day"
-            add(11, 30, "Bonifacio Day")
-            add(12, 25, "Christmas Day")
-            add(12, 30, "Rizal Day")
-            add(2, 25, "EDSA People Power Revolution Anniversary")
-            add(11, 1, "All Saints' Day")
-            add(11, 2, "All Souls' Day")
-            add(12, 8, "Immaculate Conception of Mary")
-            add(12, 31, "Last Day of the Year")
+            try:
+                req = urllib.request.Request(
+                    url,
+                    headers={"User-Agent": "TaskWise/1.0"},
+                    method="GET",
+                )
+                with urllib.request.urlopen(req, timeout=10) as resp:
+                    data = resp.read().decode("utf-8", errors="ignore")
+                    items = json.loads(data) if data else []
 
-            easter = easter_sunday(y)
-            hol[fmt_date(easter - timedelta(days=3))] = "Maundy Thursday"
-            hol[fmt_date(easter - timedelta(days=2))] = "Good Friday"
-            hol[fmt_date(easter - timedelta(days=1))] = "Black Saturday"
+                for it in items:
+                    d = (it.get("date") or "").strip()
+
+                    # ✅ ENGLISH holiday name (use "name", not "localName")
+                    name = (it.get("name") or "").strip()
+
+                    if d and name:
+                        hol[d] = name
+
+            except (urllib.error.URLError, urllib.error.HTTPError, TimeoutError, ValueError):
+                # if API fails, keep calendar usable (no holidays)
+                hol = {}
+
+            self._holiday_cache[y] = hol
             return hol
 
         holidays = ph_holidays_for_year(S.cal_year)
@@ -261,8 +252,10 @@ class CalendarPage:
                         ),
                         ft.Column(
                             spacing=1,
-                            controls=[ft.Text(label, size=11, color=C("TEXT_SECONDARY")),
-                                     ft.Text(value, size=14, weight=ft.FontWeight.BOLD, color=C("TEXT_PRIMARY"))],
+                            controls=[
+                                ft.Text(label, size=11, color=C("TEXT_SECONDARY")),
+                                ft.Text(value, size=14, weight=ft.FontWeight.BOLD, color=C("TEXT_PRIMARY")),
+                            ],
                         ),
                     ],
                 ),
@@ -338,15 +331,17 @@ class CalendarPage:
                     spacing=6,
                     controls=[
                         ft.Container(width=7, height=7, border_radius=99, bgcolor=C("ERROR_COLOR"))
-                        if is_holiday
-                        else ft.Container(width=7, height=7),
+                        if is_holiday else ft.Container(width=7, height=7),
                         ft.Container(width=7, height=7, border_radius=99, bgcolor=C("SUCCESS_COLOR"))
-                        if has_task
-                        else ft.Container(width=7, height=7),
+                        if has_task else ft.Container(width=7, height=7),
                     ],
                 )
 
-                outline = ft.border.all(2, C("BUTTON_COLOR")) if is_today and not is_selected else ft.border.all(1, border_col)
+                outline = (
+                    ft.border.all(2, C("BUTTON_COLOR"))
+                    if is_today and not is_selected
+                    else ft.border.all(1, border_col)
+                )
 
                 cells.append(
                     ft.Container(
@@ -467,17 +462,7 @@ class CalendarPage:
             else:
                 cards = []
                 for t in items:
-                    (
-                        tid,
-                        title,
-                        desc,
-                        cat,
-                        due,
-                        status,
-                        created_at,
-                        updated_at,
-                    ) = t  # FIXED for new DB schema
-
+                    (tid, title, desc, cat, due, status, created_at, updated_at) = t
                     cards.append(
                         ft.Container(
                             padding=14,
@@ -496,10 +481,7 @@ class CalendarPage:
                                         max_lines=2,
                                         overflow=ft.TextOverflow.ELLIPSIS,
                                     ),
-                                    ft.Row(
-                                        spacing=8,
-                                        controls=[category_chip(cat), status_chip(status), due_chip(due)],
-                                    ),
+                                    ft.Row(spacing=8, controls=[category_chip(cat), status_chip(status), due_chip(due)]),
                                 ],
                             ),
                         )
@@ -526,9 +508,7 @@ class CalendarPage:
                     controls=[
                         ft.Row(
                             alignment=ft.MainAxisAlignment.SPACE_BETWEEN,
-                            controls=[
-                                ft.Text("Calendar", size=20, weight=ft.FontWeight.BOLD, color=C("TEXT_PRIMARY")),
-                            ],
+                            controls=[ft.Text("Calendar", size=20, weight=ft.FontWeight.BOLD, color=C("TEXT_PRIMARY"))],
                         ),
                         header_block,
                         ft.Text("Tasks On This Day", size=13, weight=ft.FontWeight.BOLD, color=C("TEXT_PRIMARY")),
@@ -583,7 +563,8 @@ class CalendarPage:
                             ft.Text("Has Tasks", size=11, color=C("TEXT_SECONDARY"))], spacing=8),
                     ft.Row([ft.Container(width=10, height=10, border_radius=99, bgcolor=C("BUTTON_COLOR")),
                             ft.Text("Selected", size=11, color=C("TEXT_SECONDARY"))], spacing=8),
-                    ft.Row([ft.Container(width=10, height=10, border_radius=99, bgcolor="white", border=ft.border.all(2, C("BUTTON_COLOR"))),
+                    ft.Row([ft.Container(width=10, height=10, border_radius=99, bgcolor="white",
+                                         border=ft.border.all(2, C("BUTTON_COLOR"))),
                             ft.Text("Today", size=11, color=C("TEXT_SECONDARY"))], spacing=8),
                 ],
                 spacing=18,

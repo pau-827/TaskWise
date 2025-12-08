@@ -15,12 +15,12 @@ class TaskWiseApp:
         self.state.set_update_callback(self.update_ui)
 
         # Apply logged-in user
-        if user:
-            self.state.on_user_login({
-                "id": user.get("id"),
-                "username": user.get("username"),
-                "role": user.get("role")
-            })
+        self.state.on_user_login({
+            "id": user.get("id"),
+            "username": user.get("username"),
+            "name": user.get("name") or user.get("username"),  # ✅ add this
+            "role": user.get("role")
+        })
 
         # PAGE OBJECTS (Option C: taskpage, calendarpage, settingspage)
         self.taskpage = TaskPage(self.state)
