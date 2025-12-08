@@ -48,35 +48,27 @@ class TaskWiseApp:
         if not s:
             return None
 
-        # normalize ISO "T" to space for easier parsing
         s = s.replace("T", " ")
 
         for fmt in (
-            "%Y-%m-%d %I:%M %p",  # ✅ 12-hour with AM/PM
-            "%Y-%m-%d %H:%M",     # ✅ 24-hour
-            "%Y-%m-%d",           # date only
+            "%Y-%m-%d %I:%M %p",
+            "%Y-%m-%d %H:%M",
+            "%Y-%m-%d",
         ):
             try:
                 dt = datetime.strptime(s, fmt)
-                # If only a date was given, treat it as end of day so it's still "due soon"
                 if fmt == "%Y-%m-%d":
                     return datetime(dt.year, dt.month, dt.day, 23, 59)
                 return dt
             except Exception:
                 continue
 
-        # last attempt: try fromisoformat
         try:
             return datetime.fromisoformat(s)
         except Exception:
             return None
 
     def _get_due_soon_tasks(self):
-        """
-        Returns (count, tasks) for tasks due within next 24 hours (including overdue), pending only.
-        tasks item shape assumed:
-          (id, title, desc, category, due_date, status, created_at, updated_at)
-        """
         S = self.state
         db = getattr(S, "db", None)
         if not S.user or not db:
@@ -104,11 +96,9 @@ class TaskWiseApp:
             if not dt:
                 continue
 
-            # Include overdue and due within 24 hours
             if dt <= horizon:
                 due_soon.append((t, dt))
 
-        # Sort: overdue first then soonest
         due_soon.sort(key=lambda x: x[1])
         return len(due_soon), due_soon
 
@@ -138,9 +128,9 @@ class TaskWiseApp:
                 )
             else:
                 rows = []
-                for (t, dt) in items[:15]:  # keep it tidy
+                for (t, dt) in items[:15]:
                     task_id, title, desc, category, due_date, status, created_at, updated_at = t
-                    when = dt.strftime("%b %d, %Y %I:%M %p")  # ✅ 12-hour display
+                    when = dt.strftime("%b %d, %Y %I:%M %p")
                     cat = (category or "").strip() or "No Category"
 
                     rows.append(
@@ -202,12 +192,7 @@ class TaskWiseApp:
         dlg.open = True
         self.page.update()
 
-    # ✅ ADDED: open settings notification dialog, fallback to 24-hour list
     def _open_notification_settings(self):
-        """
-        Open SettingsPage's Notification Settings dialog (if exposed).
-        Falls back to the 24-hour notifications dialog.
-        """
         try:
             if hasattr(self.settingspage, "show_notification_dialog"):
                 self.settingspage.show_notification_dialog()
@@ -218,7 +203,7 @@ class TaskWiseApp:
         self._show_notifications_dialog()
 
     # ----------------------------
-    # Shared Header
+    # HEADER (UPDATED)
     # ----------------------------
     def _header(self) -> ft.Control:
         C = self.state.colors
@@ -248,9 +233,6 @@ class TaskWiseApp:
                 style=ft.ButtonStyle(color=color("TEXT_PRIMARY", "#111111")),
             )
 
-        # ----------------------------
-        # Notification bell + badge
-        # ----------------------------
         notif_count, _ = self._get_due_soon_tasks()
 
         bell_icon = ft.IconButton(
@@ -284,9 +266,16 @@ class TaskWiseApp:
             ],
         )
 
-        # User area (bell before name + login icon)
+        # ----------------------------
+        # UPDATED HERE ↓↓↓
+        # Move bell AFTER username + profile icon
+        # ----------------------------
         if self.state.user:
-            username = (self.state.user.get("username") or self.state.user.get("name") or "User").strip()
+            username = (
+                self.state.user.get("username")
+                or self.state.user.get("name")
+                or "User"
+            ).strip()
 
             user_label = ft.Text(
                 username,
@@ -301,12 +290,21 @@ class TaskWiseApp:
                 items=[ft.PopupMenuItem(text="Logout", on_click=do_logout)],
             )
 
-            right = ft.Row([bell_with_badge, user_label, profile_menu], spacing=8)
+            # NEW ORDER: name → profile → bell
+            right = ft.Row(
+                [
+                    user_label,
+                    profile_menu,
+                    bell_with_badge,
+                ],
+                spacing=8,
+                vertical_alignment=ft.CrossAxisAlignment.CENTER,
+            )
         else:
             right = ft.Row(
                 [
-                    bell_with_badge,
                     ft.Text("Guest", size=12, color=color("TEXT_PRIMARY", "#111111")),
+                    bell_with_badge,
                 ],
                 spacing=8,
             )

@@ -25,20 +25,14 @@ class SettingsPage:
             S.update()
 
         # -----------------------------------------------------
-        # SAFE USER FETCH (fixes KeyError: 'name' / 'email')
-        # + Ensures we can show a real email by reloading user from DB
+        # SAFE USER FETCH
         # -----------------------------------------------------
         def get_user_profile() -> dict:
-            """
-            Returns a safe profile dict with keys:
-            id, username, name, email, role
-            """
             profile = {"id": None, "username": "Guest", "name": "Guest", "email": "Not signed in", "role": ""}
 
             if not S.user:
                 return profile
 
-            # Start with whatever is already in S.user
             if isinstance(S.user, dict):
                 profile["id"] = S.user.get("id")
                 profile["role"] = S.user.get("role", "")
@@ -46,18 +40,15 @@ class SettingsPage:
                 profile["name"] = S.user.get("name") or profile["username"] or profile["name"]
                 profile["email"] = S.user.get("email") or profile["email"]
 
-            # If email/name missing, try loading from DB using id (preferred) then username/email fallback
             try:
                 user_row = None
 
-                # Prefer id
                 if profile["id"] is not None:
                     if hasattr(db, "get_user_by_id"):
                         user_row = db.get_user_by_id(profile["id"])
                     elif hasattr(db, "get_user"):
                         user_row = db.get_user(profile["id"])
 
-                # Fallback: try username -> email lookup if methods exist
                 if user_row is None and profile["username"] and hasattr(db, "get_user_by_username"):
                     user_row = db.get_user_by_username(profile["username"])
 
@@ -72,7 +63,6 @@ class SettingsPage:
                         profile["username"] = user_row.get("username") or profile["username"]
                         profile["role"] = user_row.get("role", profile["role"])
                     else:
-                        # Expected common: (id, username/name, email, password_hash, role, ...)
                         profile["id"] = user_row[0] if len(user_row) > 0 else profile["id"]
                         if len(user_row) > 1 and user_row[1]:
                             profile["username"] = user_row[1]
@@ -96,7 +86,7 @@ class SettingsPage:
             page.update()
 
         # -----------------------------------------------------
-        # ACCOUNT DETAILS DIALOG (make sure Name + Email always show)
+        # ACCOUNT DETAILS DIALOG
         # -----------------------------------------------------
         def show_account_dialog():
             p = get_user_profile()
@@ -131,7 +121,7 @@ class SettingsPage:
             page.update()
 
         # -----------------------------------------------------
-        # ✅ DELETE ACCOUNT (Works for any user, with confirmation)
+        # DELETE ACCOUNT
         # -----------------------------------------------------
         def confirm_delete_account():
             p = get_user_profile()
@@ -141,7 +131,6 @@ class SettingsPage:
                 page.update()
                 return
 
-            # Password confirmation field
             password_field = ft.TextField(
                 hint_text="Enter your password to confirm",
                 password=True,
@@ -155,14 +144,12 @@ class SettingsPage:
                 page.update()
 
             def do_delete(e):
-                # Verify password first
                 if not password_field.value or not password_field.value.strip():
                     page.snack_bar = ft.SnackBar(content=ft.Text("Please enter your password."), bgcolor=C("ERROR_COLOR"))
                     page.snack_bar.open = True
                     page.update()
                     return
 
-                # Get user from database to verify password
                 user = None
                 try:
                     if hasattr(db, "get_user_by_id"):
@@ -178,12 +165,10 @@ class SettingsPage:
                     page.update()
                     return
 
-                # Extract password hash
                 password_hash = None
                 if isinstance(user, dict):
                     password_hash = user.get("password_hash") or user.get("password")
                 else:
-                    # Tuple format
                     password_hash = user[3] if len(user) > 3 else None
                     if not password_hash:
                         for v in user:
@@ -191,20 +176,12 @@ class SettingsPage:
                                 password_hash = v
                                 break
 
-                if not password_hash:
-                    page.snack_bar = ft.SnackBar(content=ft.Text("Password verification failed."), bgcolor=C("ERROR_COLOR"))
-                    page.snack_bar.open = True
-                    page.update()
-                    return
-
-                # Verify password
-                if not bcrypt.verify(password_field.value, password_hash):
+                if not password_hash or not bcrypt.verify(password_field.value, password_hash):
                     page.snack_bar = ft.SnackBar(content=ft.Text("Incorrect password."), bgcolor=C("ERROR_COLOR"))
                     page.snack_bar.open = True
                     page.update()
                     return
 
-                # Delete the account
                 try:
                     if hasattr(db, "delete_user"):
                         db.delete_user(p["id"])
@@ -222,12 +199,9 @@ class SettingsPage:
                 dlg.open = False
                 page.update()
 
-                # Logout user
                 try:
                     if hasattr(S, "on_user_logout"):
                         S.on_user_logout()
-                    else:
-                        S.user = None
                 except Exception:
                     S.user = None
 
@@ -235,7 +209,6 @@ class SettingsPage:
                 page.snack_bar.open = True
                 page.update()
 
-                # Navigate to login page
                 def safe_go(name: str) -> bool:
                     try:
                         if hasattr(S, "go"):
@@ -286,7 +259,7 @@ class SettingsPage:
             page.update()
 
         # -----------------------------------------------------
-        # CHANGE PASSWORD DIALOG (functional: fetch by id, get correct password hash)
+        # CHANGE PASSWORD
         # -----------------------------------------------------
         def show_change_password_dialog():
             current_tf = ft.TextField(
@@ -309,10 +282,6 @@ class SettingsPage:
             )
 
             def _extract_user_id_and_hash(user_obj, fallback_id):
-                """
-                Returns (user_id, password_hash) for dict or tuple.
-                Supports common tuple layouts.
-                """
                 if isinstance(user_obj, dict):
                     uid = user_obj.get("id", fallback_id)
                     ph = user_obj.get("password_hash") or user_obj.get("password")
@@ -422,38 +391,6 @@ class SettingsPage:
             page.update()
 
         # -----------------------------------------------------
-        # LOGOUT (go back to main page)
-        # -----------------------------------------------------
-        def do_logout():
-            if hasattr(S, "on_user_logout"):
-                try:
-                    S.on_user_logout()
-                except Exception:
-                    S.user = None
-            else:
-                S.user = None
-
-            page.snack_bar = ft.SnackBar(content=ft.Text("Logged out."), bgcolor=C("SUCCESS_COLOR"))
-            page.snack_bar.open = True
-            page.update()
-
-            def safe_go(name: str) -> bool:
-                try:
-                    if hasattr(S, "go"):
-                        S.go(name)
-                        return True
-                except Exception:
-                    return False
-                return False
-
-            for target in ("mainpage", "loginpage", "login", "startpage", "taskpage"):
-                if safe_go(target):
-                    break
-
-            refresh()
-            page.update()
-
-        # -----------------------------------------------------
         # THEME DROPDOWN
         # -----------------------------------------------------
         theme_dd = ft.Dropdown(
@@ -470,7 +407,7 @@ class SettingsPage:
         )
 
         # -----------------------------------------------------
-        # USER DISPLAY
+        # USER PROFILE CARD
         # -----------------------------------------------------
         profile = get_user_profile()
         user_name = (profile.get("name") or profile.get("username") or "Guest").strip() or "Guest"
@@ -513,8 +450,9 @@ class SettingsPage:
                 ],
             ),
         )
+
         # -----------------------------------------------------
-        # LEFT PANEL
+        # LEFT PANEL TILE COMPONENT
         # -----------------------------------------------------
         def tile(icon, title, subtitle="", right_control=None, on_click=None):
             return ft.Container(
@@ -551,6 +489,9 @@ class SettingsPage:
                 ),
             )
 
+        # -----------------------------------------------------
+        # LEFT PANEL STACK (LOGOUT REMOVED)
+        # -----------------------------------------------------
         settings_stack = ft.Column(
             spacing=14,
             controls=[
@@ -560,38 +501,13 @@ class SettingsPage:
                 ft.Text("Account", size=13, weight=ft.FontWeight.BOLD, color=C("TEXT_PRIMARY")),
                 tile(ft.Icons.PERSON, "Account", "View profile information", on_click=lambda e: show_account_dialog()),
                 tile(ft.Icons.LOCK, "Change Password", "Update your password", on_click=lambda e: show_change_password_dialog()),
-                tile(ft.Icons.LOGOUT, "Logout", "Sign out", on_click=lambda e: do_logout()),
-
-                ft.Text("Admin", size=13, weight=ft.FontWeight.BOLD, color=C("TEXT_PRIMARY")),
                 tile(ft.Icons.DELETE_FOREVER, "Delete Account", "Remove this account permanently", on_click=lambda e: confirm_delete_account()),
             ],
         )
 
-        settings_scroll = ft.Column(
-            expand=True,
-            scroll=ft.ScrollMode.AUTO,
-            spacing=16,
-            controls=[
-                ft.Row(
-                    alignment=ft.MainAxisAlignment.SPACE_BETWEEN,
-                    controls=[
-                        ft.Text("Settings", size=20, weight=ft.FontWeight.BOLD, color=C("TEXT_PRIMARY")),
-                    ],
-                ),
-                profile_card,
-                settings_stack,
-            ],
-        )
-
-        left_panel = ft.Container(
-            expand=True,
-            border_radius=22,
-            border=ft.border.all(1.5, C("BORDER_COLOR")),
-            bgcolor=C("FORM_BG"),
-            padding=22,
-            content=settings_scroll,
-        )
-
+        # -----------------------------------------------------
+        # RIGHT PANEL
+        # -----------------------------------------------------
         preview_panel = ft.Container(
             expand=True,
             border_radius=22,
@@ -632,6 +548,32 @@ class SettingsPage:
                     ),
                 ],
             ),
+        )
+
+        # -----------------------------------------------------
+        # PAGE LAYOUT
+        # -----------------------------------------------------
+        settings_scroll = ft.Column(
+            expand=True,
+            scroll=ft.ScrollMode.AUTO,
+            spacing=16,
+            controls=[
+                ft.Row(
+                    alignment=ft.MainAxisAlignment.SPACE_BETWEEN,
+                    controls=[ft.Text("Settings", size=20, weight=ft.FontWeight.BOLD, color=C("TEXT_PRIMARY"))],
+                ),
+                profile_card,
+                settings_stack,
+            ],
+        )
+
+        left_panel = ft.Container(
+            expand=True,
+            border_radius=22,
+            border=ft.border.all(1.5, C("BORDER_COLOR")),
+            bgcolor=C("FORM_BG"),
+            padding=22,
+            content=settings_scroll,
         )
 
         board = ft.Container(
