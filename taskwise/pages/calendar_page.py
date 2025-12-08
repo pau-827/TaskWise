@@ -95,7 +95,8 @@ class CalendarPage:
         def ph_holidays_for_year(y: int) -> dict[str, str]:
             # cached
             if y in self._holiday_cache:
-                return self._holiday_cache[y]
+                # FIX: return a copy so refresh() won't clear the cached dict
+                return dict(self._holiday_cache[y])
 
             url = f"https://date.nager.at/api/v3/PublicHolidays/{y}/PH"
             hol: dict[str, str] = {}
@@ -124,7 +125,8 @@ class CalendarPage:
                 hol = {}
 
             self._holiday_cache[y] = hol
-            return hol
+            # FIX: return a copy so refresh() won't clear the cached dict
+            return dict(hol)
 
         holidays = ph_holidays_for_year(S.cal_year)
 
