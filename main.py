@@ -332,7 +332,17 @@ def main(page: ft.Page):
 
     def show_admin(e=None):
         page.clean()
-        page.add(get_admin_page(page, PRIMARY_TEXT, SECONDARY_TEXT, BUTTON_COLOR, BG_COLOR, FORM_BG))
+        page.add(
+            get_admin_page(
+                page,
+                PRIMARY_TEXT,
+                SECONDARY_TEXT,
+                BUTTON_COLOR,
+                BG_COLOR,
+                FORM_BG,
+                on_logout=logout,  # ✅ PASS logout callback
+            )
+        )
         page.update()
 
 
