@@ -32,9 +32,24 @@ def init_db():
             name TEXT NOT NULL,
             email TEXT UNIQUE NOT NULL,
             password_hash TEXT NOT NULL,
-            role TEXT DEFAULT 'user'
+            role TEXT DEFAULT 'user',
+            is_banned INTEGER DEFAULT 0,
+            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
         )
     """)
+
+    # ✅ SAFE MIGRATIONS (SQLite cannot add non-constant defaults)
+    cursor.execute("PRAGMA table_info(users)")
+    cols = [row[1] for row in cursor.fetchall()]
+
+    if "is_banned" not in cols:
+        cursor.execute("ALTER TABLE users ADD COLUMN is_banned INTEGER DEFAULT 0")
+
+    if "created_at" not in cols:
+        # add column WITHOUT default (SQLite restriction)
+        cursor.execute("ALTER TABLE users ADD COLUMN created_at TIMESTAMP")
+        # backfill existing rows
+        cursor.execute("UPDATE users SET created_at = CURRENT_TIMESTAMP WHERE created_at IS NULL")
 
     # TASKS TABLE — per user
     cursor.execute("""
@@ -82,12 +97,13 @@ def init_db():
     cursor.execute("SELECT * FROM users WHERE email = 'admin@taskwise.com'")
     if not cursor.fetchone():
         cursor.execute(
-            "INSERT INTO users (name, email, password_hash, role) VALUES (?, ?, ?, ?)",
+            "INSERT INTO users (name, email, password_hash, role, is_banned) VALUES (?, ?, ?, ?, ?)",
             (
                 "Admin",
                 "admin@taskwise.com",
                 bcrypt.hash(ADMIN_DEFAULT_PASSWORD),  # ← SECRET USED HERE
-                "admin"
+                "admin",
+                0,
             )
         )
         conn.commit()
@@ -102,8 +118,8 @@ def create_user(name, email, password_hash, role="user"):
         conn = connect()
         cursor = conn.cursor()
         cursor.execute(
-            "INSERT INTO users (name, email, password_hash, role) VALUES (?, ?, ?, ?)",
-            (name, email, password_hash, role)
+            "INSERT INTO users (name, email, password_hash, role, is_banned, created_at) VALUES (?, ?, ?, ?, ?, ?)",
+            (name, email, password_hash, role, 0, datetime.now().strftime("%Y-%m-%d %H:%M:%S"))
         )
         conn.commit()
         conn.close()
@@ -115,7 +131,7 @@ def get_user_by_email(email):
     conn = connect()
     cursor = conn.cursor()
     cursor.execute(
-        "SELECT id, name, email, password_hash, role FROM users WHERE email = ?",
+        "SELECT id, name, email, password_hash, role, COALESCE(is_banned, 0) FROM users WHERE email = ?",
         (email,)
     )
     row = cursor.fetchone()
@@ -128,6 +144,7 @@ def get_user_by_email(email):
             "email": row[2],
             "password_hash": row[3],
             "role": row[4],
+            "is_banned": bool(row[5]),
         }
     return None
 
@@ -135,7 +152,7 @@ def get_user_by_id(user_id):
     conn = connect()
     cursor = conn.cursor()
     cursor.execute(
-        "SELECT id, name, email, password_hash, role FROM users WHERE id = ?",
+        "SELECT id, name, email, password_hash, role, COALESCE(is_banned, 0) FROM users WHERE id = ?",
         (user_id,)
     )
     row = cursor.fetchone()
@@ -148,6 +165,7 @@ def get_user_by_id(user_id):
             "email": row[2],
             "password_hash": row[3],
             "role": row[4],
+            "is_banned": bool(row[5]),
         }
     return None
 
@@ -158,7 +176,7 @@ def get_user_by_username(username):
     conn = connect()
     cursor = conn.cursor()
     cursor.execute(
-        "SELECT id, name, email, password_hash, role FROM users WHERE name = ?",
+        "SELECT id, name, email, password_hash, role, COALESCE(is_banned, 0) FROM users WHERE name = ?",
         (username,)
     )
     row = cursor.fetchone()
@@ -171,6 +189,7 @@ def get_user_by_username(username):
             "email": row[2],
             "password_hash": row[3],
             "role": row[4],
+            "is_banned": bool(row[5]),
         }
     return None
 
@@ -183,6 +202,60 @@ def update_user_password(user_id, new_password_hash):
     )
     conn.commit()
     conn.close()
+
+# --- Admin: Users list + ban/unban + delete ---
+def get_users():
+    conn = connect()
+    cursor = conn.cursor()
+    cursor.execute("""
+        SELECT id, name, email, role, COALESCE(is_banned, 0)
+        FROM users
+        ORDER BY created_at DESC
+    """)
+    rows = cursor.fetchall()
+    conn.close()
+
+    users = []
+    for r in rows:
+        users.append({
+            "id": r[0],
+            "name": r[1],
+            "email": r[2],
+            "role": r[3],
+            "is_banned": bool(r[4]),
+        })
+    return users
+
+def ban_user(user_id):
+    conn = connect()
+    cursor = conn.cursor()
+    cursor.execute("UPDATE users SET is_banned = 1 WHERE id = ?", (user_id,))
+    conn.commit()
+    conn.close()
+
+def unban_user(user_id):
+    conn = connect()
+    cursor = conn.cursor()
+    cursor.execute("UPDATE users SET is_banned = 0 WHERE id = ?", (user_id,))
+    conn.commit()
+    conn.close()
+
+def delete_user(user_id):
+    conn = connect()
+    cursor = conn.cursor()
+
+    # delete related data first
+    cursor.execute("DELETE FROM tasks WHERE user_id = ?", (user_id,))
+    cursor.execute("DELETE FROM app_settings WHERE user_id = ?", (user_id,))
+    cursor.execute("DELETE FROM logs WHERE user_id = ?", (user_id,))
+    cursor.execute("DELETE FROM users WHERE id = ?", (user_id,))
+
+    conn.commit()
+    conn.close()
+
+def is_user_banned(email):
+    u = get_user_by_email(email)
+    return bool(u and u.get("is_banned"))
 
 # -------------------------------------------------------------
 # Logging
@@ -209,8 +282,8 @@ def get_logs():
     conn = connect()
     cursor = conn.cursor()
     cursor.execute("""
-        SELECT id, user_id, email, action, details, created_at 
-        FROM logs 
+        SELECT id, user_id, email, action, details, created_at
+        FROM logs
         ORDER BY created_at DESC
     """)
     rows = cursor.fetchall()
@@ -258,7 +331,7 @@ def update_task(user_id, task_id, title, description, category, due_date, status
     conn = connect()
     cursor = conn.cursor()
     cursor.execute("""
-        UPDATE tasks SET 
+        UPDATE tasks SET
             title=?, description=?, category=?, due_date=?, status=?,
             updated_at=CURRENT_TIMESTAMP
         WHERE id=? AND user_id=?
@@ -270,7 +343,7 @@ def update_task_status(user_id, task_id, status):
     conn = connect()
     cursor = conn.cursor()
     cursor.execute("""
-        UPDATE tasks 
+        UPDATE tasks
         SET status=?, updated_at=CURRENT_TIMESTAMP
         WHERE id=? AND user_id=?
     """, (status, task_id, user_id))
@@ -298,7 +371,6 @@ def set_setting(user_id, key, value):
     """, (user_id, key, value))
     conn.commit()
     conn.close()
-
 
 def get_setting(user_id, key, default=None):
     conn = connect()

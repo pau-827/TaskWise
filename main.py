@@ -4,6 +4,7 @@ from vault import get_secret     # ← NEW (Secret Config)
 import admin
 import db
 from taskwise.app import run_taskwise_app
+from admin import get_admin_page
 
 
 def main(page: ft.Page):
@@ -328,48 +329,12 @@ def main(page: ft.Page):
     # ----------------------------------
     # ADMIN PANEL
     # ----------------------------------
-    def show_admin():
+
+    def show_admin(e=None):
         page.clean()
-        logs = db.get_logs()
-
-        log_list = ft.ListView(
-            expand=True,
-            spacing=10,
-            controls=[
-                ft.Container(
-                    bgcolor=FORM_BG,
-                    padding=10,
-                    border_radius=10,
-                    content=ft.Column(
-                        [
-                            ft.Text(f"User ID: {log['user_id']}"),
-                            ft.Text(f"Email: {log['email']}"),
-                            ft.Text(f"Action: {log['action']}"),
-                            ft.Text(f"Details: {log['details']}"),
-                            ft.Text(f"Time: {log['created_at']}"),
-                        ]
-                    ),
-                )
-                for log in logs
-            ],
-        )
-
-        page.add(
-            ft.Column(
-                expand=True,
-                controls=[
-                    ft.Row(
-                        alignment=ft.MainAxisAlignment.SPACE_BETWEEN,
-                        controls=[
-                            ft.Text("Admin Panel", size=22, weight="bold"),
-                            ft.TextButton("Back", on_click=lambda e: show_front_page()),
-                        ],
-                    ),
-                    ft.Container(expand=True, content=log_list),
-                ],
-            )
-        )
+        page.add(get_admin_page(page, PRIMARY_TEXT, SECONDARY_TEXT, BUTTON_COLOR, BG_COLOR, FORM_BG))
         page.update()
+
 
     # ----------------------------------
     # LOGIN LOGIC
@@ -386,6 +351,10 @@ def main(page: ft.Page):
             user = db.get_user_by_email(email)
             if not user:
                 show_message("Invalid email or password.")
+                return
+            
+            if user.get("is_banned"):
+                show_message("Your account is banned. Contact admin.")
                 return
 
             if not bcrypt.verify(pw, user["password_hash"]):
