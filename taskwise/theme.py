@@ -12,6 +12,9 @@ THEMES = {
         "BORDER_COLOR": "#4A707A",
         "ERROR_COLOR": "#E53935",
         "SUCCESS_COLOR": "#4CAF50",
+        "CHART_COLORS": [ "#035477", "#A855F7"],
+        "CHART_BG": "#E3F4F4",
+        "CHART_TEXT": "#4A707A",
     },
     "Pink": {
         "BG_COLOR": "#FFD1D9",
@@ -23,7 +26,10 @@ THEMES = {
         "BORDER_COLOR": "#4A0B1F",
         "ERROR_COLOR": "#E53935",
         "SUCCESS_COLOR": "#4CAF50",
-    },
+        "CHART_COLORS": ["#7C2D12", "#BE123C", "#0EA5E9", "#16A34A", "#6D28D9"],
+        "CHART_BG": "#FF8FB0",
+        "CHART_TEXT": "#4A0B1F",
+            },
 # taskwise/theme.py
     "Dark Mode": {
         # App backgrounds
@@ -39,10 +45,11 @@ THEMES = {
         "INFO_COLOR": "#38BDF8",
         "HEADER_BG": "#0A1426",       # top bar background
         "HEADER_BORDER": "#22314B",   # optional, safe to have
+        "CHART_COLORS": ["#0EA5E9", "#16A34A", "#6D28D9"],
+        "CHART_BG": "#FF8FB0",
+        "CHART_TEXT": "#4A0B1F",
     },
 }
-
-
 
 # ------------------------------
 # Safe theme access helper

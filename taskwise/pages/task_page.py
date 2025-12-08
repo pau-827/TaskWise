@@ -1038,7 +1038,14 @@ class TaskPage:
             else:
                 self._chart_rotation = (self._chart_rotation + 18) % 360
 
+                # ✅ FIX: use per-theme chart palette (fallback list if not defined)
+                chart_palette = S.colors.get(
+                    "CHART_COLORS",
+                    ["#06B6D4", "#22C55E", "#F59E0B", "#EF4444", "#A855F7"],
+                )
+
                 pie_sections = []
+                color_i = 0
                 for label, val in cat_counts.items():
                     if val <= 0:
                         continue
@@ -1048,9 +1055,11 @@ class TaskPage:
                             value=val,
                             title=f"{label} {pct:.0f}%",
                             radius=62,
+                            color=chart_palette[color_i % len(chart_palette)],  # ✅ changed
                             title_style=ft.TextStyle(size=10, color=ft.Colors.WHITE, weight=ft.FontWeight.BOLD),
                         )
                     )
+                    color_i += 1
 
                 donut = ft.PieChart(
                     sections=pie_sections,
