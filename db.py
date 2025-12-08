@@ -1,9 +1,13 @@
 import sqlite3
 from passlib.hash import bcrypt
 from datetime import datetime
+from vault import get_secret
 
-DB_NAME = "taskwise.db"
-
+# -------------------------------------------------------------
+# Secure Configuration (from .env / encrypted .env)
+# -------------------------------------------------------------
+DB_NAME = get_secret("DB_NAME", "taskwise.db")
+ADMIN_DEFAULT_PASSWORD = get_secret("ADMIN_DEFAULT_PASSWORD", "Admin123")
 
 # -------------------------------------------------------------
 # Utility
@@ -11,10 +15,8 @@ DB_NAME = "taskwise.db"
 def get_db_path():
     return DB_NAME
 
-
 def connect():
     return sqlite3.connect(DB_NAME, check_same_thread=False)
-
 
 # -------------------------------------------------------------
 # Database Initialization
@@ -81,12 +83,16 @@ def init_db():
     if not cursor.fetchone():
         cursor.execute(
             "INSERT INTO users (name, email, password_hash, role) VALUES (?, ?, ?, ?)",
-            ("Admin", "admin@taskwise.com", bcrypt.hash("admin123"), "admin")
+            (
+                "Admin",
+                "admin@taskwise.com",
+                bcrypt.hash(ADMIN_DEFAULT_PASSWORD),  # ← SECRET USED HERE
+                "admin"
+            )
         )
         conn.commit()
 
     conn.close()
-
 
 # -------------------------------------------------------------
 # User Functions
@@ -104,7 +110,6 @@ def create_user(name, email, password_hash, role="user"):
         return True
     except sqlite3.IntegrityError:
         return False
-
 
 def get_user_by_email(email):
     conn = connect()
@@ -126,8 +131,6 @@ def get_user_by_email(email):
         }
     return None
 
-
-# ADDED: used by SettingsPage (preferred)
 def get_user_by_id(user_id):
     conn = connect()
     cursor = conn.cursor()
@@ -148,15 +151,10 @@ def get_user_by_id(user_id):
         }
     return None
 
-
-# ADDED: SettingsPage fallback (some code calls db.get_user(id))
 def get_user(user_id):
     return get_user_by_id(user_id)
 
-
-# ADDED: SettingsPage optional fallback
 def get_user_by_username(username):
-    # In your schema, "name" acts like the username label.
     conn = connect()
     cursor = conn.cursor()
     cursor.execute(
@@ -176,8 +174,6 @@ def get_user_by_username(username):
         }
     return None
 
-
-# ADDED: Change Password dialog uses this
 def update_user_password(user_id, new_password_hash):
     conn = connect()
     cursor = conn.cursor()
@@ -187,7 +183,6 @@ def update_user_password(user_id, new_password_hash):
     )
     conn.commit()
     conn.close()
-
 
 # -------------------------------------------------------------
 # Logging
@@ -209,7 +204,6 @@ def add_log(action, details="", user_id=None):
     """, (user_id, email, action, details))
     conn.commit()
     conn.close()
-
 
 def get_logs():
     conn = connect()
@@ -234,7 +228,6 @@ def get_logs():
         })
     return logs
 
-
 # -------------------------------------------------------------
 # Task Functions (per-user isolated)
 # -------------------------------------------------------------
@@ -247,7 +240,6 @@ def add_task(user_id, title, description="", category="", due_date=""):
     )
     conn.commit()
     conn.close()
-
 
 def get_tasks_by_user(user_id):
     conn = connect()
@@ -262,7 +254,6 @@ def get_tasks_by_user(user_id):
     conn.close()
     return rows
 
-
 def update_task(user_id, task_id, title, description, category, due_date, status):
     conn = connect()
     cursor = conn.cursor()
@@ -275,7 +266,6 @@ def update_task(user_id, task_id, title, description, category, due_date, status
     conn.commit()
     conn.close()
 
-
 def update_task_status(user_id, task_id, status):
     conn = connect()
     cursor = conn.cursor()
@@ -287,7 +277,6 @@ def update_task_status(user_id, task_id, status):
     conn.commit()
     conn.close()
 
-
 def delete_task(user_id, task_id):
     conn = connect()
     cursor = conn.cursor()
@@ -295,9 +284,8 @@ def delete_task(user_id, task_id):
     conn.commit()
     conn.close()
 
-
 # -------------------------------------------------------------
-# Per-User Settings (theme, preferences)
+# Per-User Settings
 # -------------------------------------------------------------
 def set_setting(user_id, key, value):
     conn = connect()
@@ -327,7 +315,7 @@ def get_setting(user_id, key, default=None):
 
     val = row[0]
 
-    # ADDED: make notification switches work (booleans)
+    # Boolean normalization for switches
     if isinstance(default, bool):
         s = str(val).strip().lower()
         if s in ("1", "true", "yes", "y", "on"):

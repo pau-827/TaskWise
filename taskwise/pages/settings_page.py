@@ -10,20 +10,6 @@ class SettingsPage:
 
     def __init__(self, state):
         self.S = state
-        # ADDED: expose notifications dialog to header bell
-        self._open_notification_dialog = None
-
-    # ADDED: callable from app.py (header bell)
-    def open_notifications(self):
-        if callable(self._open_notification_dialog):
-            self._open_notification_dialog()
-
-    # FIX ADDED: aliases so app.py can call any of these names safely
-    def open_notification_dialog(self):
-        self.open_notifications()
-
-    def show_notification_dialog(self):
-        self.open_notifications()
 
     def view(self, page: ft.Page):
         S = self.S
@@ -145,109 +131,7 @@ class SettingsPage:
             page.update()
 
         # -----------------------------------------------------
-        # NOTIFICATION SETTINGS (per-user)
-        # -----------------------------------------------------
-        def show_notification_dialog():
-            p = get_user_profile()
-            if not S.user or not p.get("id"):
-                page.snack_bar = ft.SnackBar(
-                    content=ft.Text("Please login first."),
-                    bgcolor=C("ERROR_COLOR"),
-                )
-                page.snack_bar.open = True
-                page.update()
-                return
-
-            user_id = p["id"]
-
-            task_due = db.get_setting(user_id, "notify_task_due", True)
-            task_created = db.get_setting(user_id, "notify_task_created", True)
-            task_completed = db.get_setting(user_id, "notify_task_completed", False)
-
-            task_due_switch = ft.Switch(value=task_due, active_color=C("BUTTON_COLOR"))
-            task_created_switch = ft.Switch(value=task_created, active_color=C("BUTTON_COLOR"))
-            task_completed_switch = ft.Switch(value=task_completed, active_color=C("BUTTON_COLOR"))
-
-            def save_notifications(e):
-                db.set_setting(user_id, "notify_task_due", task_due_switch.value)
-                db.set_setting(user_id, "notify_task_created", task_created_switch.value)
-                db.set_setting(user_id, "notify_task_completed", task_completed_switch.value)
-
-                dlg.open = False
-                page.snack_bar = ft.SnackBar(
-                    content=ft.Text("Notification preferences saved."),
-                    bgcolor=C("SUCCESS_COLOR"),
-                )
-                page.snack_bar.open = True
-                page.update()
-
-            notification_options = ft.Column(
-                spacing=16,
-                controls=[
-                    ft.Row(
-                        alignment=ft.MainAxisAlignment.SPACE_BETWEEN,
-                        controls=[
-                            ft.Column(
-                                spacing=2,
-                                controls=[
-                                    ft.Text("Task Due Soon", weight=ft.FontWeight.BOLD, color=C("TEXT_PRIMARY")),
-                                    ft.Text("Notify when tasks are near due date", size=11, color=C("TEXT_SECONDARY")),
-                                ],
-                            ),
-                            task_due_switch,
-                        ],
-                    ),
-                    ft.Divider(height=1, color=C("BORDER_COLOR")),
-                    ft.Row(
-                        alignment=ft.MainAxisAlignment.SPACE_BETWEEN,
-                        controls=[
-                            ft.Column(
-                                spacing=2,
-                                controls=[
-                                    ft.Text("Task Created", weight=ft.FontWeight.BOLD, color=C("TEXT_PRIMARY")),
-                                    ft.Text("Notify when tasks are created", size=11, color=C("TEXT_SECONDARY")),
-                                ],
-                            ),
-                            task_created_switch,
-                        ],
-                    ),
-                    ft.Divider(height=1, color=C("BORDER_COLOR")),
-                    ft.Row(
-                        alignment=ft.MainAxisAlignment.SPACE_BETWEEN,
-                        controls=[
-                            ft.Column(
-                                spacing=2,
-                                controls=[
-                                    ft.Text("Task Completed", weight=ft.FontWeight.BOLD, color=C("TEXT_PRIMARY")),
-                                    ft.Text("Notify when tasks are completed", size=11, color=C("TEXT_SECONDARY")),
-                                ],
-                            ),
-                            task_completed_switch,
-                        ],
-                    ),
-                ],
-            )
-
-            dlg = ft.AlertDialog(
-                modal=True,
-                bgcolor=C("FORM_BG"),
-                title=ft.Text("Notification Settings", weight=ft.FontWeight.BOLD, color=C("TEXT_PRIMARY")),
-                content=ft.Container(width=480, padding=8, content=notification_options),
-                actions=[
-                    ft.TextButton("Cancel", on_click=lambda e: close_dialog(dlg)),
-                    ft.ElevatedButton("Save", on_click=save_notifications, bgcolor=C("BUTTON_COLOR"), color="white"),
-                ],
-                shape=ft.RoundedRectangleBorder(radius=16),
-            )
-            page.overlay.append(dlg)
-            dlg.open = True
-            page.update()
-
-        # ADDED: expose notifications dialog to header bell
-        self._open_notification_dialog = lambda: show_notification_dialog()
-
-        # -----------------------------------------------------
-        # ✅ ADDED: DELETE ACCOUNT (ADMIN)
+        # ✅ DELETE ACCOUNT (Works for any user, with confirmation)
         # -----------------------------------------------------
         def confirm_delete_account():
             p = get_user_profile()
@@ -257,21 +141,80 @@ class SettingsPage:
                 page.update()
                 return
 
-            if (p.get("role") or "").lower() != "admin":
-                page.snack_bar = ft.SnackBar(content=ft.Text("Admin access required."), bgcolor=C("ERROR_COLOR"))
-                page.snack_bar.open = True
-                page.update()
-                return
+            # Password confirmation field
+            password_field = ft.TextField(
+                hint_text="Enter your password to confirm",
+                password=True,
+                can_reveal_password=True,
+                filled=True,
+                width=400,
+            )
 
             def close_dlg(e):
                 dlg.open = False
                 page.update()
 
             def do_delete(e):
+                # Verify password first
+                if not password_field.value or not password_field.value.strip():
+                    page.snack_bar = ft.SnackBar(content=ft.Text("Please enter your password."), bgcolor=C("ERROR_COLOR"))
+                    page.snack_bar.open = True
+                    page.update()
+                    return
+
+                # Get user from database to verify password
+                user = None
                 try:
-                    db.delete_user(p["id"])
+                    if hasattr(db, "get_user_by_id"):
+                        user = db.get_user_by_id(p["id"])
+                    elif hasattr(db, "get_user"):
+                        user = db.get_user(p["id"])
                 except Exception:
-                    page.snack_bar = ft.SnackBar(content=ft.Text("Delete failed."), bgcolor=C("ERROR_COLOR"))
+                    pass
+
+                if not user:
+                    page.snack_bar = ft.SnackBar(content=ft.Text("Account not found."), bgcolor=C("ERROR_COLOR"))
+                    page.snack_bar.open = True
+                    page.update()
+                    return
+
+                # Extract password hash
+                password_hash = None
+                if isinstance(user, dict):
+                    password_hash = user.get("password_hash") or user.get("password")
+                else:
+                    # Tuple format
+                    password_hash = user[3] if len(user) > 3 else None
+                    if not password_hash:
+                        for v in user:
+                            if isinstance(v, str) and v.startswith("$2"):
+                                password_hash = v
+                                break
+
+                if not password_hash:
+                    page.snack_bar = ft.SnackBar(content=ft.Text("Password verification failed."), bgcolor=C("ERROR_COLOR"))
+                    page.snack_bar.open = True
+                    page.update()
+                    return
+
+                # Verify password
+                if not bcrypt.verify(password_field.value, password_hash):
+                    page.snack_bar = ft.SnackBar(content=ft.Text("Incorrect password."), bgcolor=C("ERROR_COLOR"))
+                    page.snack_bar.open = True
+                    page.update()
+                    return
+
+                # Delete the account
+                try:
+                    if hasattr(db, "delete_user"):
+                        db.delete_user(p["id"])
+                    else:
+                        page.snack_bar = ft.SnackBar(content=ft.Text("Delete function not available."), bgcolor=C("ERROR_COLOR"))
+                        page.snack_bar.open = True
+                        page.update()
+                        return
+                except Exception as ex:
+                    page.snack_bar = ft.SnackBar(content=ft.Text(f"Delete failed: {str(ex)}"), bgcolor=C("ERROR_COLOR"))
                     page.snack_bar.open = True
                     page.update()
                     return
@@ -279,6 +222,7 @@ class SettingsPage:
                 dlg.open = False
                 page.update()
 
+                # Logout user
                 try:
                     if hasattr(S, "on_user_logout"):
                         S.on_user_logout()
@@ -287,18 +231,53 @@ class SettingsPage:
                 except Exception:
                     S.user = None
 
-                page.snack_bar = ft.SnackBar(content=ft.Text("Account deleted."), bgcolor=C("SUCCESS_COLOR"))
+                page.snack_bar = ft.SnackBar(content=ft.Text("Account deleted successfully."), bgcolor=C("SUCCESS_COLOR"))
                 page.snack_bar.open = True
                 page.update()
+
+                # Navigate to login page
+                def safe_go(name: str) -> bool:
+                    try:
+                        if hasattr(S, "go"):
+                            S.go(name)
+                            return True
+                    except Exception:
+                        return False
+                    return False
+
+                for target in ("loginpage", "login", "startpage", "mainpage"):
+                    if safe_go(target):
+                        break
 
             dlg = ft.AlertDialog(
                 modal=True,
                 bgcolor=C("FORM_BG"),
                 title=ft.Text("Delete Account", weight=ft.FontWeight.BOLD, color=C("TEXT_PRIMARY")),
-                content=ft.Text("This will permanently remove this account. Continue?", color=C("TEXT_SECONDARY")),
+                content=ft.Container(
+                    width=450,
+                    padding=8,
+                    content=ft.Column(
+                        spacing=12,
+                        controls=[
+                            ft.Text(
+                                "⚠️ Warning: This action cannot be undone!",
+                                color=C("ERROR_COLOR"),
+                                weight=ft.FontWeight.BOLD,
+                                size=14,
+                            ),
+                            ft.Text(
+                                "All your data, tasks, and settings will be permanently deleted.",
+                                color=C("TEXT_SECONDARY"),
+                                size=12,
+                            ),
+                            ft.Divider(height=1, color=C("BORDER_COLOR")),
+                            password_field,
+                        ],
+                    ),
+                ),
                 actions=[
                     ft.TextButton("Cancel", on_click=close_dlg),
-                    ft.ElevatedButton("Delete", on_click=do_delete, bgcolor=C("ERROR_COLOR"), color="white"),
+                    ft.ElevatedButton("Delete My Account", on_click=do_delete, bgcolor=C("ERROR_COLOR"), color="white"),
                 ],
                 shape=ft.RoundedRectangleBorder(radius=16),
             )
@@ -506,7 +485,7 @@ class SettingsPage:
             border=ft.border.all(1.5, C("BORDER_COLOR")),
             padding=18,
             content=ft.Row(
-                alignment=ft.MainAxisAlignment.SPACE_BETWEEN,  # ✅ pushes last item to far right
+                alignment=ft.MainAxisAlignment.SPACE_BETWEEN,
                 vertical_alignment=ft.CrossAxisAlignment.CENTER,
                 controls=[
                     ft.Row(
@@ -577,25 +556,17 @@ class SettingsPage:
             controls=[
                 ft.Text("Preferences", size=13, weight=ft.FontWeight.BOLD, color=C("TEXT_PRIMARY")),
                 tile(ft.Icons.PALETTE, "Theme", "Switch your look and feel", right_control=theme_dd),
-                tile(
-                    ft.Icons.NOTIFICATIONS,
-                    "Notifications",
-                    "Manage notification preferences",
-                    on_click=lambda e: show_notification_dialog(),
-                ),
 
                 ft.Text("Account", size=13, weight=ft.FontWeight.BOLD, color=C("TEXT_PRIMARY")),
                 tile(ft.Icons.PERSON, "Account", "View profile information", on_click=lambda e: show_account_dialog()),
                 tile(ft.Icons.LOCK, "Change Password", "Update your password", on_click=lambda e: show_change_password_dialog()),
                 tile(ft.Icons.LOGOUT, "Logout", "Sign out", on_click=lambda e: do_logout()),
 
-                # ✅ ADDED: Admin section + tiles
                 ft.Text("Admin", size=13, weight=ft.FontWeight.BOLD, color=C("TEXT_PRIMARY")),
                 tile(ft.Icons.DELETE_FOREVER, "Delete Account", "Remove this account permanently", on_click=lambda e: confirm_delete_account()),
             ],
         )
 
-        # ADDED: make settings panel scrollable
         settings_scroll = ft.Column(
             expand=True,
             scroll=ft.ScrollMode.AUTO,
@@ -656,12 +627,6 @@ class SettingsPage:
                                         ft.Text("Set due dates so tasks appear on the calendar.", size=12, color=C("TEXT_PRIMARY")),
                                     ]
                                 ),
-                                ft.Row(
-                                    controls=[
-                                        ft.Icon(ft.Icons.NOTIFICATIONS_ACTIVE, color=C("BUTTON_COLOR")),
-                                        ft.Text("Enable notifications to stay informed.", size=12, color=C("TEXT_PRIMARY")),
-                                    ]
-                                ),
                             ],
                         ),
                     ),
@@ -678,7 +643,7 @@ class SettingsPage:
             content=ft.Row(
                 expand=True,
                 spacing=18,
-                vertical_alignment=ft.CrossAxisAlignment.STRETCH,  # ✅ makes both sides equal height
+                vertical_alignment=ft.CrossAxisAlignment.STRETCH,
                 controls=[
                     ft.Container(content=left_panel, expand=6),
                     ft.Container(content=preview_panel, expand=4),

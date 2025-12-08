@@ -1,6 +1,7 @@
 import flet as ft
 from passlib.hash import bcrypt
-import admin  # keep if you use it elsewhere
+from vault import get_secret     # ← NEW (Secret Config)
+import admin
 import db
 from taskwise.app import run_taskwise_app
 
@@ -14,17 +15,22 @@ def main(page: ft.Page):
     page.padding = 0
     page.window_width = 1000
     page.window_height = 600
-
-    # IMPORTANT: don't keep global page scrolling on,
-    # because it can interfere with your task_page/app UI.
     page.scroll = None
 
-    # Initialize SQLite DB
+    # Initialize DB
     db.init_db()
     try:
         print("USING DB:", db.get_db_path())
-    except Exception:
+    except:
         pass
+
+    # ----------------------------------
+    # SECURE CONFIG (from .env / encrypted ENC(...))
+    # ----------------------------------
+    ADMIN_EMAIL = get_secret("ADMIN_EMAIL", "admin@taskwise.com")
+    # You can also preload other secrets here later if needed:
+    # API_KEY = get_secret("API_KEY")
+    # SERVICE_URL = get_secret("SERVICE_URL")
 
     # ----------------------------------
     # COLOR SCHEME
@@ -33,23 +39,19 @@ def main(page: ft.Page):
     FORM_BG = "#E3F4F4"
     BUTTON_COLOR = "#D2E9E9"
     CARD_BG = "#C4DFDF"
-
     PRIMARY_TEXT = "#4A707A"
     SECONDARY_TEXT = "#6B8F97"
     SUCCESS_GREEN = "#4CAF50"
-
-    ADMIN_EMAIL = "admin@taskwise.com"
 
     # ----------------------------------
     # SNACKBAR
     # ----------------------------------
     def show_message(text: str, color="red"):
         snack = ft.SnackBar(content=ft.Text(text), bgcolor=color, duration=2000)
-        # prefer page.snack_bar, but keep overlay style similar to your original code
         try:
             page.overlay.append(snack)
             snack.open = True
-        except Exception:
+        except:
             page.snack_bar = snack
             page.snack_bar.open = True
         page.update()
@@ -72,7 +74,7 @@ def main(page: ft.Page):
         )
 
     # ----------------------------------
-    # UI HELPERS (Flet 0.28.3 safe)
+    # UI HELPERS
     # ----------------------------------
     def pill(text, icon):
         return ft.Container(
@@ -129,7 +131,7 @@ def main(page: ft.Page):
             ),
             content=ft.Column(
                 spacing=12,
-                horizontal_alignment=ft.CrossAxisAlignment.CENTER,  # center content
+                horizontal_alignment=ft.CrossAxisAlignment.CENTER,
                 controls=[
                     ft.Container(
                         width=64,
@@ -172,6 +174,9 @@ def main(page: ft.Page):
         card.on_hover = on_hover
         return card
 
+    # ----------------------------------
+    # CONTACT ADMIN DIALOG
+    # ----------------------------------
     def show_contact_admin_dialog(e=None):
         dlg = ft.AlertDialog(modal=True)
         page.dialog = dlg
@@ -216,19 +221,15 @@ def main(page: ft.Page):
         page.update()
 
     # ----------------------------------
-    # IMPORTANT: SAFE SWITCH TO TASKWISE APP
-    # (prevents landing UI settings from breaking task_page)
+    # SAFE SWITCH TO MAIN APP
     # ----------------------------------
     def switch_to_taskwise_app():
         try:
             page.views.clear()
-        except Exception:
+        except:
             pass
 
-        # Hard clear landing UI
         page.controls.clear()
-
-        # Reset page-wide properties that can conflict with task_page layout
         page.scroll = None
         page.padding = 0
         page.appbar = None
@@ -237,15 +238,12 @@ def main(page: ft.Page):
         page.drawer = None
         page.dialog = None
 
-        # Don't wipe overlay entirely (SnackBars), but clear old ones safely
         try:
             page.overlay.clear()
-        except Exception:
+        except:
             pass
 
         page.update()
-
-        # Launch your modular TaskWise app (task_page, routes, etc.)
         run_taskwise_app(page, on_logout=logout)
 
     # ----------------------------------
@@ -273,13 +271,13 @@ def main(page: ft.Page):
     def logout(e=None):
         try:
             db.add_log("LOGOUT", "User logged out", page.session.get("user_id"))
-        except Exception:
+        except:
             pass
         page.session.clear()
         show_front_page()
 
     # ----------------------------------
-    # SIGNUP + LOGIN STATE
+    # SIGNUP + LOGIN FIELDS
     # ----------------------------------
     name_field = styled_field("Name")
     email_field = styled_field("Email")
@@ -319,14 +317,11 @@ def main(page: ft.Page):
                 show_message("Account creation failed. Try again.")
                 return
 
-            # Log signup
-            try:
-                db.add_log("Signup", f"New user: {email}", None)
-            except Exception:
-                pass
+            db.add_log("Signup", f"New user: {email}", None)
 
             show_message("Account created! You can now log in.", SUCCESS_GREEN)
             show_login_page()
+
         except Exception as ex:
             show_message(f"Signup failed: {ex}")
 
@@ -377,7 +372,7 @@ def main(page: ft.Page):
         page.update()
 
     # ----------------------------------
-    # LOGIN LOGIC (FIXED)
+    # LOGIN LOGIC
     # ----------------------------------
     def handle_login(e):
         email = (login_email_field.value or "").strip().lower()
@@ -389,43 +384,31 @@ def main(page: ft.Page):
 
         try:
             user = db.get_user_by_email(email)
-
             if not user:
                 show_message("Invalid email or password.")
                 return
 
-            # Debug prints (safe now user exists)
-            # print("DEBUG USER RECORD:", user)
-            # print("INPUT PASSWORD:", pw)
-            # print("HASH IN DB:", user["password_hash"])
-            # print("VERIFY RESULT:", bcrypt.verify(pw, user["password_hash"]))
-
-            # ✔ FIXED password verification
             if not bcrypt.verify(pw, user["password_hash"]):
                 show_message("Invalid email or password.")
                 return
 
-            # ✔ Save session
             page.session.set("user_id", user["id"])
             page.session.set("user_name", user["name"])
             page.session.set("user_role", user["role"])
 
-            # Log login
-            try:
-                db.add_log("Login", f"{user['email']} logged in", user_id=user["id"])
-            except Exception:
-                pass
+            db.add_log("Login", f"{user['email']} logged in", user_id=user["id"])
 
-            # ✔ ADMIN REDIRECT (fixed)
             if user["role"] == "admin":
                 print("ADMIN LOGIN → ADMIN PANEL")
                 show_admin()
                 return
 
-            # ✔ USER REDIRECT (modular TaskWise)
             print("USER LOGIN → TASKWISE APP")
-            # pass `username` expected by TaskWiseApp as `name`
-            run_taskwise_app(page, on_logout=logout, user={"id": user["id"], "username": user["name"], "role": user["role"]})
+            run_taskwise_app(
+                page,
+                on_logout=logout,
+                user={"id": user["id"], "username": user["name"], "role": user["role"]},
+            )
 
         except Exception as ex:
             show_message(f"Login failed: {ex}")
