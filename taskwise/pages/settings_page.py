@@ -10,6 +10,20 @@ class SettingsPage:
 
     def __init__(self, state):
         self.S = state
+        # ADDED: expose notifications dialog to header bell
+        self._open_notification_dialog = None
+
+    # ADDED: callable from app.py (header bell)
+    def open_notifications(self):
+        if callable(self._open_notification_dialog):
+            self._open_notification_dialog()
+
+    # FIX ADDED: aliases so app.py can call any of these names safely
+    def open_notification_dialog(self):
+        self.open_notifications()
+
+    def show_notification_dialog(self):
+        self.open_notifications()
 
     def view(self, page: ft.Page):
         S = self.S
@@ -117,7 +131,12 @@ class SettingsPage:
                 modal=True,
                 bgcolor=C("FORM_BG"),
                 title=ft.Text("Account", weight=ft.FontWeight.BOLD, color=C("TEXT_PRIMARY")),
-                content=ft.Container(width=420, content=content, padding=8),
+                content=ft.Container(
+                    width=420,
+                    height=20,
+                    content=content,
+                    padding=8,
+                ),
                 actions=[ft.TextButton("Close", on_click=lambda e: close_dialog(dlg))],
                 shape=ft.RoundedRectangleBorder(radius=16),
             )
@@ -224,6 +243,69 @@ class SettingsPage:
             dlg.open = True
             page.update()
 
+        # ADDED: expose notifications dialog to header bell
+        self._open_notification_dialog = lambda: show_notification_dialog()
+
+        # -----------------------------------------------------
+        # ✅ ADDED: DELETE ACCOUNT (ADMIN)
+        # -----------------------------------------------------
+        def confirm_delete_account():
+            p = get_user_profile()
+            if not S.user or not p.get("id"):
+                page.snack_bar = ft.SnackBar(content=ft.Text("Please login first."), bgcolor=C("ERROR_COLOR"))
+                page.snack_bar.open = True
+                page.update()
+                return
+
+            if (p.get("role") or "").lower() != "admin":
+                page.snack_bar = ft.SnackBar(content=ft.Text("Admin access required."), bgcolor=C("ERROR_COLOR"))
+                page.snack_bar.open = True
+                page.update()
+                return
+
+            def close_dlg(e):
+                dlg.open = False
+                page.update()
+
+            def do_delete(e):
+                try:
+                    db.delete_user(p["id"])
+                except Exception:
+                    page.snack_bar = ft.SnackBar(content=ft.Text("Delete failed."), bgcolor=C("ERROR_COLOR"))
+                    page.snack_bar.open = True
+                    page.update()
+                    return
+
+                dlg.open = False
+                page.update()
+
+                try:
+                    if hasattr(S, "on_user_logout"):
+                        S.on_user_logout()
+                    else:
+                        S.user = None
+                except Exception:
+                    S.user = None
+
+                page.snack_bar = ft.SnackBar(content=ft.Text("Account deleted."), bgcolor=C("SUCCESS_COLOR"))
+                page.snack_bar.open = True
+                page.update()
+
+            dlg = ft.AlertDialog(
+                modal=True,
+                bgcolor=C("FORM_BG"),
+                title=ft.Text("Delete Account", weight=ft.FontWeight.BOLD, color=C("TEXT_PRIMARY")),
+                content=ft.Text("This will permanently remove this account. Continue?", color=C("TEXT_SECONDARY")),
+                actions=[
+                    ft.TextButton("Cancel", on_click=close_dlg),
+                    ft.ElevatedButton("Delete", on_click=do_delete, bgcolor=C("ERROR_COLOR"), color="white"),
+                ],
+                shape=ft.RoundedRectangleBorder(radius=16),
+            )
+            page.overlay.append(dlg)
+            dlg.open = True
+            page.update()
+
         # -----------------------------------------------------
         # CHANGE PASSWORD DIALOG (functional: fetch by id, get correct password hash)
         # -----------------------------------------------------
@@ -257,13 +339,9 @@ class SettingsPage:
                     ph = user_obj.get("password_hash") or user_obj.get("password")
                     return uid, ph
 
-                # tuple: try common patterns safely
                 uid = user_obj[0] if len(user_obj) > 0 else fallback_id
-
-                # most common in your project earlier: user[3] is password_hash
                 ph = user_obj[3] if len(user_obj) > 3 else None
 
-                # fallback scan (in case schema differs): pick first long-ish bcrypt string
                 if not ph:
                     for v in user_obj:
                         if isinstance(v, str) and v.startswith("$2"):
@@ -289,7 +367,6 @@ class SettingsPage:
                 except Exception:
                     user = None
 
-                # last resort: email lookup (only if we truly have one)
                 if not user:
                     email_lookup = (p.get("email") or "").strip()
                     if email_lookup and email_lookup != "Not signed in" and hasattr(db, "get_user_by_email"):
@@ -350,7 +427,8 @@ class SettingsPage:
                 bgcolor=C("FORM_BG"),
                 title=ft.Text("Change Password", weight=ft.FontWeight.BOLD, color=C("TEXT_PRIMARY")),
                 content=ft.Container(
-                    width=420,
+                    width=480,
+                    height=170,
                     padding=8,
                     content=ft.Column([current_tf, new_tf, confirm_tf], spacing=12),
                 ),
@@ -368,7 +446,6 @@ class SettingsPage:
         # LOGOUT (go back to main page)
         # -----------------------------------------------------
         def do_logout():
-            # clear user
             if hasattr(S, "on_user_logout"):
                 try:
                     S.on_user_logout()
@@ -377,12 +454,10 @@ class SettingsPage:
             else:
                 S.user = None
 
-            # show feedback (so you can confirm click fired)
             page.snack_bar = ft.SnackBar(content=ft.Text("Logged out."), bgcolor=C("SUCCESS_COLOR"))
             page.snack_bar.open = True
             page.update()
 
-            # Try to route to a valid page name without breaking the app
             def safe_go(name: str) -> bool:
                 try:
                     if hasattr(S, "go"):
@@ -392,14 +467,12 @@ class SettingsPage:
                     return False
                 return False
 
-            # try common landing pages in your project
             for target in ("mainpage", "loginpage", "login", "startpage", "taskpage"):
                 if safe_go(target):
                     break
 
             refresh()
             page.update()
-
 
         # -----------------------------------------------------
         # THEME DROPDOWN
@@ -418,7 +491,7 @@ class SettingsPage:
         )
 
         # -----------------------------------------------------
-        # USER DISPLAY (fix: show signed-in state based on DB profile)
+        # USER DISPLAY
         # -----------------------------------------------------
         profile = get_user_profile()
         user_name = (profile.get("name") or profile.get("username") or "Guest").strip() or "Guest"
@@ -433,18 +506,24 @@ class SettingsPage:
             border=ft.border.all(1.5, C("BORDER_COLOR")),
             padding=18,
             content=ft.Row(
-                spacing=14,
+                alignment=ft.MainAxisAlignment.SPACE_BETWEEN,  # ✅ pushes last item to far right
+                vertical_alignment=ft.CrossAxisAlignment.CENTER,
                 controls=[
-                    ft.CircleAvatar(
-                        radius=26,
-                        bgcolor=C("BUTTON_COLOR"),
-                        content=ft.Text((user_name[:1] if user_name else "G").upper(), color="white"),
-                    ),
-                    ft.Column(
-                        spacing=4,
+                    ft.Row(
+                        spacing=14,
                         controls=[
-                            ft.Text(user_name, size=16, weight=ft.FontWeight.BOLD, color=C("TEXT_PRIMARY")),
-                            ft.Text(display_email, size=11, color=C("TEXT_SECONDARY")),
+                            ft.CircleAvatar(
+                                radius=26,
+                                bgcolor=C("BUTTON_COLOR"),
+                                content=ft.Text((user_name[:1] if user_name else "G").upper(), color="white"),
+                            ),
+                            ft.Column(
+                                spacing=4,
+                                controls=[
+                                    ft.Text(user_name, size=16, weight=ft.FontWeight.BOLD, color=C("TEXT_PRIMARY")),
+                                    ft.Text(display_email, size=11, color=C("TEXT_SECONDARY")),
+                                ],
+                            ),
                         ],
                     ),
                     ft.IconButton(
@@ -455,7 +534,6 @@ class SettingsPage:
                 ],
             ),
         )
-
         # -----------------------------------------------------
         # LEFT PANEL
         # -----------------------------------------------------
@@ -505,10 +583,32 @@ class SettingsPage:
                     "Manage notification preferences",
                     on_click=lambda e: show_notification_dialog(),
                 ),
+
                 ft.Text("Account", size=13, weight=ft.FontWeight.BOLD, color=C("TEXT_PRIMARY")),
                 tile(ft.Icons.PERSON, "Account", "View profile information", on_click=lambda e: show_account_dialog()),
                 tile(ft.Icons.LOCK, "Change Password", "Update your password", on_click=lambda e: show_change_password_dialog()),
                 tile(ft.Icons.LOGOUT, "Logout", "Sign out", on_click=lambda e: do_logout()),
+
+                # ✅ ADDED: Admin section + tiles
+                ft.Text("Admin", size=13, weight=ft.FontWeight.BOLD, color=C("TEXT_PRIMARY")),
+                tile(ft.Icons.DELETE_FOREVER, "Delete Account", "Remove this account permanently", on_click=lambda e: confirm_delete_account()),
+            ],
+        )
+
+        # ADDED: make settings panel scrollable
+        settings_scroll = ft.Column(
+            expand=True,
+            scroll=ft.ScrollMode.AUTO,
+            spacing=16,
+            controls=[
+                ft.Row(
+                    alignment=ft.MainAxisAlignment.SPACE_BETWEEN,
+                    controls=[
+                        ft.Text("Settings", size=20, weight=ft.FontWeight.BOLD, color=C("TEXT_PRIMARY")),
+                    ],
+                ),
+                profile_card,
+                settings_stack,
             ],
         )
 
@@ -518,24 +618,9 @@ class SettingsPage:
             border=ft.border.all(1.5, C("BORDER_COLOR")),
             bgcolor=C("FORM_BG"),
             padding=22,
-            content=ft.Column(
-                spacing=16,
-                controls=[
-                    ft.Row(
-                        alignment=ft.MainAxisAlignment.SPACE_BETWEEN,
-                        controls=[
-                            ft.Text("Settings", size=20, weight=ft.FontWeight.BOLD, color=C("TEXT_PRIMARY")),
-                        ],
-                    ),
-                    profile_card,
-                    settings_stack,
-                ],
-            ),
+            content=settings_scroll,
         )
 
-        # -----------------------------------------------------
-        # RIGHT PANEL (unchanged, preview content)
-        # -----------------------------------------------------
         preview_panel = ft.Container(
             expand=True,
             border_radius=22,
@@ -584,9 +669,6 @@ class SettingsPage:
             ),
         )
 
-        # -----------------------------------------------------
-        # MAIN LAYOUT
-        # -----------------------------------------------------
         board = ft.Container(
             expand=True,
             border_radius=22,
@@ -596,6 +678,7 @@ class SettingsPage:
             content=ft.Row(
                 expand=True,
                 spacing=18,
+                vertical_alignment=ft.CrossAxisAlignment.STRETCH,  # ✅ makes both sides equal height
                 controls=[
                     ft.Container(content=left_panel, expand=6),
                     ft.Container(content=preview_panel, expand=4),

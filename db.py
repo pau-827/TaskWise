@@ -127,6 +127,68 @@ def get_user_by_email(email):
     return None
 
 
+# ADDED: used by SettingsPage (preferred)
+def get_user_by_id(user_id):
+    conn = connect()
+    cursor = conn.cursor()
+    cursor.execute(
+        "SELECT id, name, email, password_hash, role FROM users WHERE id = ?",
+        (user_id,)
+    )
+    row = cursor.fetchone()
+    conn.close()
+
+    if row:
+        return {
+            "id": row[0],
+            "name": row[1],
+            "email": row[2],
+            "password_hash": row[3],
+            "role": row[4],
+        }
+    return None
+
+
+# ADDED: SettingsPage fallback (some code calls db.get_user(id))
+def get_user(user_id):
+    return get_user_by_id(user_id)
+
+
+# ADDED: SettingsPage optional fallback
+def get_user_by_username(username):
+    # In your schema, "name" acts like the username label.
+    conn = connect()
+    cursor = conn.cursor()
+    cursor.execute(
+        "SELECT id, name, email, password_hash, role FROM users WHERE name = ?",
+        (username,)
+    )
+    row = cursor.fetchone()
+    conn.close()
+
+    if row:
+        return {
+            "id": row[0],
+            "name": row[1],
+            "email": row[2],
+            "password_hash": row[3],
+            "role": row[4],
+        }
+    return None
+
+
+# ADDED: Change Password dialog uses this
+def update_user_password(user_id, new_password_hash):
+    conn = connect()
+    cursor = conn.cursor()
+    cursor.execute(
+        "UPDATE users SET password_hash = ? WHERE id = ?",
+        (new_password_hash, user_id)
+    )
+    conn.commit()
+    conn.close()
+
+
 # -------------------------------------------------------------
 # Logging
 # -------------------------------------------------------------
@@ -259,4 +321,19 @@ def get_setting(user_id, key, default=None):
     )
     row = cursor.fetchone()
     conn.close()
-    return row[0] if row else default
+
+    if not row:
+        return default
+
+    val = row[0]
+
+    # ADDED: make notification switches work (booleans)
+    if isinstance(default, bool):
+        s = str(val).strip().lower()
+        if s in ("1", "true", "yes", "y", "on"):
+            return True
+        if s in ("0", "false", "no", "n", "off"):
+            return False
+        return default
+
+    return val

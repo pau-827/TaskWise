@@ -31,6 +31,9 @@ class TaskPage:
 
         self._due_date_picker: Optional[ft.DatePicker] = None
 
+        # ✅ add TimePicker (for due time)
+        self._due_time_picker: Optional[ft.TimePicker] = None
+
         # small “movement” on refresh (rotate chart)
         self._chart_rotation = 0
 
@@ -45,10 +48,105 @@ class TaskPage:
         return d.strftime("%Y-%m-%d")
 
     @staticmethod
+    def _fmt_time_12h(hour: int, minute: int) -> str:
+        ampm = "AM" if hour < 12 else "PM"
+        h12 = hour % 12
+        if h12 == 0:
+            h12 = 12
+        return f"{h12}:{minute:02d} {ampm}"
+
+    @staticmethod
+    def _normalize_time_str(s: str) -> str:
+        """
+        Accepts:
+          - HH:MM   (24h)
+          - H:MM AM/PM  (12h)
+        Returns 12h string: h:MM AM/PM, or "" if invalid.
+        """
+        s = (s or "").strip()
+        if not s:
+            return ""
+
+        # already AM/PM?
+        upper = s.upper()
+        if "AM" in upper or "PM" in upper:
+            try:
+                dt = datetime.strptime(upper.replace("  ", " ").strip(), "%I:%M %p")
+                return f"{dt.strftime('%I').lstrip('0') or '12'}:{dt.strftime('%M')} {dt.strftime('%p')}"
+            except Exception:
+                return ""
+
+        # try 24h HH:MM
+        try:
+            hh, mm = s.split(":", 1)
+            hour = int(hh)
+            minute = int(mm)
+            if 0 <= hour <= 23 and 0 <= minute <= 59:
+                return TaskPage._fmt_time_12h(hour, minute)
+        except Exception:
+            pass
+
+        return ""
+
+    @staticmethod
     def _safe_parse_date(s: Optional[str]) -> Optional[date]:
+        """
+        Accepts:
+          - YYYY-MM-DD
+          - YYYY-MM-DD HH:MM
+          - YYYY-MM-DD hh:MM AM/PM
+          - YYYY-MM-DDTHH:MM
+        Returns date or None.
+        """
         try:
             s = (s or "").strip()
-            return datetime.strptime(s, "%Y-%m-%d").date() if s else None
+            if not s:
+                return None
+
+            # Strip time portion if present
+            if " " in s:
+                s = s.split(" ", 1)[0]
+            if "T" in s:
+                s = s.split("T", 1)[0]
+
+            return datetime.strptime(s, "%Y-%m-%d").date()
+        except Exception:
+            return None
+
+    @staticmethod
+    def _safe_parse_datetime(s: Optional[str]) -> Optional[datetime]:
+        """
+        Accepts:
+          - YYYY-MM-DD
+          - YYYY-MM-DD HH:MM
+          - YYYY-MM-DD hh:MM AM/PM
+          - YYYY-MM-DDTHH:MM
+        Returns datetime or None.
+        """
+        try:
+            s = (s or "").strip()
+            if not s:
+                return None
+
+            # Normalize "T" separator
+            s = s.replace("T", " ")
+
+            # Try common formats (12h first so "1:18 PM" works)
+            for fmt in ("%Y-%m-%d %I:%M %p", "%Y-%m-%d %H:%M", "%Y-%m-%d"):
+                try:
+                    dt = datetime.strptime(s, fmt)
+                    if fmt == "%Y-%m-%d":
+                        # If only date, treat as end of day for due/overdue logic
+                        return datetime(dt.year, dt.month, dt.day, 23, 59)
+                    return dt
+                except Exception:
+                    continue
+
+            # last attempt
+            try:
+                return datetime.fromisoformat(s)
+            except Exception:
+                return None
         except Exception:
             return None
 
@@ -86,10 +184,11 @@ class TaskPage:
             return sorted(tasks, key=lambda t: (t[1] or "").strip().lower(), reverse=True)
 
         if mode == "Due Date":
+
             def due_key(t):
-                dd = self._safe_parse_date(t[4])  # due_date index 4
-                # push empty dates to bottom
-                return (dd is None, dd or date.max)
+                dt = self._safe_parse_datetime(t[4])  # due_date index 4
+                return (dt is None, dt or datetime.max)
+
             return sorted(tasks, key=due_key)
 
         if mode == "Date Created":
@@ -100,6 +199,7 @@ class TaskPage:
                     return datetime.fromisoformat(s.replace("Z", "+00:00"))
                 except Exception:
                     return datetime.min
+
             return sorted(tasks, key=created_key, reverse=True)
 
         # Custom: use drag order
@@ -126,10 +226,12 @@ class TaskPage:
 
         q = (self.search_query or "").strip().lower()
         if q:
+
             def ok(t):
                 title = (t[1] or "").lower()
                 desc = (t[2] or "").lower()
                 return q in title or q in desc
+
             tasks = [t for t in tasks if ok(t)]
 
         # apply sort
@@ -137,10 +239,10 @@ class TaskPage:
         return tasks
 
     def _is_overdue(self, due_date_str: Optional[str], status: str) -> bool:
-        if not due_date_str or status != "pending":
+        if not due_date_str or (status or "").strip().lower() != "pending":
             return False
-        dd = self._safe_parse_date(due_date_str)
-        return bool(dd and dd < datetime.now().date())
+        dt = self._safe_parse_datetime(due_date_str)
+        return bool(dt and dt < datetime.now())
 
     # ---------------------------
     # Refresh helpers (only update mounted controls)
@@ -162,9 +264,7 @@ class TaskPage:
         current = getattr(S, "current_filter", "All Tasks")
 
         if self._mounted(self._filter_pill):
-            self._filter_pill.content = ft.Text(
-                current, size=11, color="white", weight=ft.FontWeight.W_600
-            )
+            self._filter_pill.content = ft.Text(current, size=11, color="white", weight=ft.FontWeight.W_600)
             self._safe_update(self._filter_pill)
 
         if self._mounted(self._filter_chip_row):
@@ -199,6 +299,12 @@ class TaskPage:
             self._due_date_picker = ft.DatePicker()
         if self._due_date_picker not in page.overlay:
             page.overlay.append(self._due_date_picker)
+
+        # ✅ Ensure TimePicker exists and is in overlay
+        if not self._due_time_picker:
+            self._due_time_picker = ft.TimePicker()
+        if self._due_time_picker not in page.overlay:
+            page.overlay.append(self._due_time_picker)
 
         # ---------------------------
         # Navigation helpers
@@ -267,6 +373,7 @@ class TaskPage:
                         current_tasks = self._get_filtered_tasks()
                         self._ensure_custom_order(current_tasks)
                     self._refresh_task_list(page)
+
                 return _h
 
             return ft.PopupMenuButton(
@@ -292,10 +399,7 @@ class TaskPage:
 
             def do_delete(e):
                 if not S.user:
-                    page.snack_bar = ft.SnackBar(
-                        content=ft.Text("No user logged in."),
-                        bgcolor=C("ERROR_COLOR"),
-                    )
+                    page.snack_bar = ft.SnackBar(content=ft.Text("No user logged in."), bgcolor=C("ERROR_COLOR"))
                     page.snack_bar.open = True
                     page.update()
                     return
@@ -306,10 +410,7 @@ class TaskPage:
                 dlg.open = False
                 page.update()
 
-                page.snack_bar = ft.SnackBar(
-                    content=ft.Text("Task deleted!"),
-                    bgcolor=C("SUCCESS_COLOR"),
-                )
+                page.snack_bar = ft.SnackBar(content=ft.Text("Task deleted!"), bgcolor=C("SUCCESS_COLOR"))
                 page.snack_bar.open = True
                 page.update()
 
@@ -369,6 +470,18 @@ class TaskPage:
                 color=C("TEXT_PRIMARY"),
             )
 
+            # ✅ Time field (12h)
+            time_tf = ft.TextField(
+                hint_text="Time (Pick From Clock)",
+                read_only=True,
+                value="",
+                bgcolor=C("BG_COLOR"),
+                filled=True,
+                border_color=C("BORDER_COLOR"),
+                border_radius=12,
+                color=C("TEXT_PRIMARY"),
+            )
+
             def open_picker(e):
                 initial = self._safe_parse_date(due_tf.value) or S.selected_date or datetime.now().date()
                 self._due_date_picker.value = initial
@@ -388,6 +501,20 @@ class TaskPage:
                 self._due_date_picker.open = True
                 page.update()
 
+            # ✅ Time picker open (set 12h AM/PM)
+            def open_time_picker(e):
+                def on_time_change(ev):
+                    picked = self._due_time_picker.value
+                    if picked:
+                        time_tf.value = self._fmt_time_12h(picked.hour, picked.minute)
+                    else:
+                        time_tf.value = ""
+                    page.update()
+
+                self._due_time_picker.on_change = on_time_change
+                self._due_time_picker.open = True
+                page.update()
+
             def save_task(e):
                 if not S.user:
                     page.snack_bar = ft.SnackBar(content=ft.Text("No user logged in."), bgcolor=C("ERROR_COLOR"))
@@ -398,7 +525,13 @@ class TaskPage:
                 title = (title_tf.value or "").strip()
                 desc = (desc_tf.value or "").strip()
                 cat = (category_dd.value or "").strip()
-                due = (due_tf.value or "").strip()
+
+                due_date_part = (due_tf.value or "").strip()
+                due_time_part = (time_tf.value or "").strip()
+
+                due = due_date_part
+                if due_date_part and due_time_part:
+                    due = f"{due_date_part} {due_time_part}"
 
                 if not title:
                     page.snack_bar = ft.SnackBar(content=ft.Text("Title is required."), bgcolor=C("ERROR_COLOR"))
@@ -449,6 +582,13 @@ class TaskPage:
                                 ],
                                 spacing=10,
                             ),
+                            ft.Row(
+                                [
+                                    ft.Container(time_tf, expand=True),
+                                    ft.IconButton(icon=ft.Icons.ACCESS_TIME, icon_color=C("TEXT_PRIMARY"), on_click=open_time_picker),
+                                ],
+                                spacing=10,
+                            ),
                         ],
                         tight=True,
                         spacing=12,
@@ -478,6 +618,21 @@ class TaskPage:
                 old_updated_at,
             ) = task_row
 
+            old_due_str = (old_due or "").strip()
+            old_date_part = old_due_str
+            old_time_part = ""
+
+            if "T" in old_due_str:
+                old_due_str = old_due_str.replace("T", " ")
+
+            if " " in old_due_str:
+                parts = old_due_str.split(" ")
+                old_date_part = parts[0]
+                old_time_part = " ".join(parts[1:]).strip()
+
+            # normalize stored time to 12h for display
+            old_time_part = self._normalize_time_str(old_time_part)
+
             title_tf = ft.TextField(
                 value=old_title,
                 hint_text="Task Title",
@@ -505,8 +660,20 @@ class TaskPage:
 
             due_tf = ft.TextField(
                 read_only=True,
-                value=(old_due or "").strip(),
+                value=(old_date_part or "").strip(),
                 hint_text="Due Date (Pick From Calendar)",
+                bgcolor=C("BG_COLOR"),
+                filled=True,
+                border_color=C("BORDER_COLOR"),
+                border_radius=12,
+                color=C("TEXT_PRIMARY"),
+            )
+
+            # ✅ Time field (12h)
+            time_tf = ft.TextField(
+                read_only=True,
+                value=(old_time_part or "").strip(),
+                hint_text="Time (Pick From Clock)",
                 bgcolor=C("BG_COLOR"),
                 filled=True,
                 border_color=C("BORDER_COLOR"),
@@ -533,6 +700,20 @@ class TaskPage:
                 self._due_date_picker.open = True
                 page.update()
 
+            # ✅ Time picker open (set 12h AM/PM)
+            def open_time_picker(e):
+                def on_time_change(ev):
+                    picked = self._due_time_picker.value
+                    if picked:
+                        time_tf.value = self._fmt_time_12h(picked.hour, picked.minute)
+                    else:
+                        time_tf.value = ""
+                    page.update()
+
+                self._due_time_picker.on_change = on_time_change
+                self._due_time_picker.open = True
+                page.update()
+
             def save_changes(e):
                 if not S.user:
                     page.snack_bar = ft.SnackBar(content=ft.Text("No user logged in."), bgcolor=C("ERROR_COLOR"))
@@ -543,7 +724,13 @@ class TaskPage:
                 title = (title_tf.value or "").strip()
                 desc = (desc_tf.value or "").strip()
                 cat = (category_dd.value or "").strip()
-                due = (due_tf.value or "").strip()
+
+                due_date_part = (due_tf.value or "").strip()
+                due_time_part = (time_tf.value or "").strip()
+
+                due = due_date_part
+                if due_date_part and due_time_part:
+                    due = f"{due_date_part} {due_time_part}"
 
                 if not title:
                     page.snack_bar = ft.SnackBar(content=ft.Text("Title cannot be empty."), bgcolor=C("ERROR_COLOR"))
@@ -587,6 +774,13 @@ class TaskPage:
                                 [
                                     ft.Container(due_tf, expand=True),
                                     ft.IconButton(icon=ft.Icons.CALENDAR_MONTH, icon_color=C("TEXT_PRIMARY"), on_click=open_picker),
+                                ],
+                                spacing=10,
+                            ),
+                            ft.Row(
+                                [
+                                    ft.Container(time_tf, expand=True),
+                                    ft.IconButton(icon=ft.Icons.ACCESS_TIME, icon_color=C("TEXT_PRIMARY"), on_click=open_time_picker),
                                 ],
                                 spacing=10,
                             ),
@@ -812,10 +1006,11 @@ class TaskPage:
             total = len(tasks)
 
             completed = sum(1 for t in tasks if t[5] == "completed")
-            today = datetime.now().date()
+            now = datetime.now()
             overdue = sum(
-                1 for t in tasks
-                if t[5] == "pending" and self._safe_parse_date(t[4]) and self._safe_parse_date(t[4]) < today
+                1
+                for t in tasks
+                if (t[5] == "pending" and self._safe_parse_datetime(t[4]) and self._safe_parse_datetime(t[4]) < now)
             )
             pending = total - completed
             progress = 0 if total == 0 else completed / total
@@ -963,10 +1158,20 @@ class TaskPage:
                         ft.Row(
                             spacing=10,
                             controls=[
-                                ft.ElevatedButton("Open Calendar", on_click=lambda e: go_calendar_today(),
-                                                  bgcolor=C("BUTTON_COLOR"), color=ft.Colors.BLACK, expand=True),
-                                ft.ElevatedButton("Open Settings", on_click=lambda e: go_settings(),
-                                                  bgcolor=C("BUTTON_COLOR"), color=ft.Colors.BLACK, expand=True),
+                                ft.ElevatedButton(
+                                    "Open Calendar",
+                                    on_click=lambda e: go_calendar_today(),
+                                    bgcolor=C("BUTTON_COLOR"),
+                                    color=ft.Colors.BLACK,
+                                    expand=True,
+                                ),
+                                ft.ElevatedButton(
+                                    "Open Settings",
+                                    on_click=lambda e: go_settings(),
+                                    bgcolor=C("BUTTON_COLOR"),
+                                    color=ft.Colors.BLACK,
+                                    expand=True,
+                                ),
                             ],
                         ),
                     ],
@@ -984,6 +1189,7 @@ class TaskPage:
             def f(e):
                 S.current_filter = label
                 self._refresh_all(page)
+
             return f
 
         def build_filter_bar():
