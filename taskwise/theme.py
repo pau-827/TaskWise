@@ -3,9 +3,9 @@
 # Central theme registry
 THEMES = {
     "Light Mode": {
-        "BG_COLOR": "#F8F6F4",
+        "BG_COLOR": "#97C7C3",
         "FORM_BG": "#E3F4F4",
-        "BUTTON_COLOR": "#D2E9E9",
+        "BUTTON_COLOR": "#97C7C3",
         "HEADER_BG": "#F8F6F4",
         "TEXT_PRIMARY": "#4A707A",
         "TEXT_SECONDARY": "#6B8F97",
@@ -33,12 +33,12 @@ THEMES = {
 # taskwise/theme.py
     "Dark Mode": {
         # App backgrounds
-        "BG_COLOR": "#0B1220",       
-        "FORM_BG": "#0F1A2C",        
-        "TEXT_PRIMARY": "#87BAC3",   
-        "TEXT_SECONDARY": "#8ABEB9", 
-        "BORDER_COLOR": "#B7E5CD",   
-        "BUTTON_COLOR": "#8ABEB9",   
+        "BG_COLOR": "#23262B",       
+        "FORM_BG": "#3D4148",        
+        "TEXT_PRIMARY": "#959595",   
+        "TEXT_SECONDARY": "#707070", 
+        "BORDER_COLOR": "#707070",   
+        "BUTTON_COLOR": "#707070",   
         "SUCCESS_COLOR": "#22C55E",  
         "ERROR_COLOR": "#EF4444",    
         "WARNING_COLOR": "#F59E0B",
@@ -50,7 +50,6 @@ THEMES = {
         "CHART_TEXT": "#4A0B1F",
     },
 }
-
 # ------------------------------
 # Safe theme access helper
 # ------------------------------

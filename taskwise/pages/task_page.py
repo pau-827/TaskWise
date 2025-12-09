@@ -886,7 +886,7 @@ class TaskPage:
             )
 
             card_body = ft.Container(
-                bgcolor="white",
+                bgcolor="#FFFFFF",
                 border_radius=14,
                 border=ft.border.all(1, C("BORDER_COLOR")),
                 padding=ft.padding.symmetric(horizontal=14, vertical=12),

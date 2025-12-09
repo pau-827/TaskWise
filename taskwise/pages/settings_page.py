@@ -249,6 +249,7 @@ class SettingsPage:
                 content=ft.Container(
                     width=450,
                     padding=8,
+                    height=180,
                     content=ft.Column(
                         spacing=12,
                         controls=[

@@ -712,6 +712,7 @@ def main(page: ft.Page):
                                                         color=PRIMARY_TEXT,
                                                     ),
                                                 ),
+
                                             ],
                                         ),
                                         # Feature Cards
