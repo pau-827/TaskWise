@@ -8,28 +8,27 @@ import urllib.error
 
 
 class CalendarPage:
-
     def __init__(self, state):
         self.S = state
-        # cache for API holidays per year
+        # Cache holidays per year so we don't call the API every refresh
         self._holiday_cache: dict[int, dict[str, str]] = {}
 
     def view(self, page: ft.Page):
         S = self.S
         db = S.db
 
-        # -----------------------------------------------------
-        # COLOR HELPER
-        # -----------------------------------------------------
+        # -----------------------------
+        # Theme color shortcut
+        # -----------------------------
         def C(k: str) -> str:
             return S.colors.get(k, "#000000")
 
-        # PH realtime date (Asia/Manila)
+        # Local date (Asia/Manila)
         TODAY = datetime.now(ZoneInfo("Asia/Manila")).date()
 
-        # -----------------------------------------------------
-        # DATE HELPERS
-        # -----------------------------------------------------
+        # -----------------------------
+        # Date parsing + formatting
+        # -----------------------------
         def fmt_date(d: date) -> str:
             return d.strftime("%Y-%m-%d")
 
@@ -62,23 +61,24 @@ class CalendarPage:
             d = safe_parse_date(due_str)
             return fmt_date(d) if d else ""
 
-        # -----------------------------------------------------
-        # CALENDAR MATH
-        # -----------------------------------------------------
+        # -----------------------------
+        # Calendar calculations
+        # -----------------------------
         def days_in_month(y: int, m: int) -> int:
             if m == 12:
                 return 31
             return (date(y, m + 1, 1) - date(y, m, 1)).days
 
         def weekday_sun0(d: date) -> int:
-            return (d.weekday() + 1) % 7  # Sunday=0..Saturday=6
+            # Python weekday: Mon=0..Sun=6, convert to Sun=0..Sat=6
+            return (d.weekday() + 1) % 7
 
         def month_abbr(m: int) -> str:
             return ["JAN", "FEB", "MAR", "APR", "MAY", "JUN", "JUL", "AUG", "SEP", "OCT", "NOV", "DEC"][m - 1]
 
-        # -----------------------------------------------------
-        # NORMALIZE SHARED STATE
-        # -----------------------------------------------------
+        # -----------------------------
+        # Make sure shared state is valid
+        # -----------------------------
         if isinstance(getattr(S, "selected_date", None), str):
             S.selected_date = safe_parse_date(S.selected_date) or TODAY
 
@@ -89,13 +89,13 @@ class CalendarPage:
             S.cal_year = S.selected_date.year
             S.cal_month = S.selected_date.month
 
-        # -----------------------------------------------------
-        # PH HOLIDAYS (API-BASED, ENGLISH NAMES)
-        # -----------------------------------------------------
+        # -----------------------------
+        # PH holidays from API (English names)
+        # -----------------------------
         def ph_holidays_for_year(y: int) -> dict[str, str]:
-            # cached
+            # Use cache first
             if y in self._holiday_cache:
-                # FIX: return a copy so refresh() won't clear the cached dict
+                # Return a copy so later changes don't mess with the cache
                 return dict(self._holiday_cache[y])
 
             url = f"https://date.nager.at/api/v3/PublicHolidays/{y}/PH"
@@ -113,19 +113,16 @@ class CalendarPage:
 
                 for it in items:
                     d = (it.get("date") or "").strip()
-
-                    # ✅ ENGLISH holiday name (use "name", not "localName")
+                    # Use "name" (English), not "localName"
                     name = (it.get("name") or "").strip()
-
                     if d and name:
                         hol[d] = name
 
             except (urllib.error.URLError, urllib.error.HTTPError, TimeoutError, ValueError):
-                # if API fails, keep calendar usable (no holidays)
+                # If API fails, just show no holidays (calendar still works)
                 hol = {}
 
             self._holiday_cache[y] = hol
-            # FIX: return a copy so refresh() won't clear the cached dict
             return dict(hol)
 
         holidays = ph_holidays_for_year(S.cal_year)
@@ -133,9 +130,9 @@ class CalendarPage:
         def holiday_name(d: date) -> str:
             return holidays.get(fmt_date(d), "")
 
-        # -----------------------------------------------------
-        # DB TASKS (PER-USER FIXED)
-        # -----------------------------------------------------
+        # -----------------------------
+        # Tasks (per-user)
+        # -----------------------------
         def all_tasks():
             if not S.user:
                 return []
@@ -158,7 +155,7 @@ class CalendarPage:
                 if due_date_only(due) == ds:
                     out.append(t)
 
-            # Sort by time (HH:MM) if present
+            # Sort tasks by time if the due string has a time part
             def sort_key(trow):
                 tm = safe_parse_time((trow[4] or "").strip())
                 return tm if tm else (99, 99)
@@ -182,9 +179,9 @@ class CalendarPage:
                     cnt += 1
             return cnt
 
-        # -----------------------------------------------------
-        # RELATIVE LABEL
-        # -----------------------------------------------------
+        # -----------------------------
+        # "Today / days left" label
+        # -----------------------------
         def relative_label(target: date) -> str:
             diff = (target - TODAY).days
             if diff == 0:
@@ -193,17 +190,17 @@ class CalendarPage:
                 return f"{diff} day(s) left"
             return f"{abs(diff)} day(s) ago"
 
-        # -----------------------------------------------------
-        # REFRESH CALENDAR
-        # -----------------------------------------------------
+        # -----------------------------
+        # Refresh calendar (keep UI the same)
+        # -----------------------------
         def refresh():
             holidays.clear()
             holidays.update(ph_holidays_for_year(S.cal_year))
             S.update()
 
-        # -----------------------------------------------------
-        # MONTH NAVIGATION
-        # -----------------------------------------------------
+        # -----------------------------
+        # Month navigation
+        # -----------------------------
         def prev_month(e):
             if S.cal_month == 1:
                 S.cal_month = 12
@@ -220,9 +217,9 @@ class CalendarPage:
                 S.cal_month += 1
             refresh()
 
-        # -----------------------------------------------------
-        # UI HELPERS
-        # -----------------------------------------------------
+        # -----------------------------
+        # Small UI helpers
+        # -----------------------------
         def pill(text: str, bgcolor: str, fg: str = "white", border_color=None):
             return ft.Container(
                 padding=ft.padding.symmetric(horizontal=12, vertical=7),
@@ -263,18 +260,18 @@ class CalendarPage:
                 ),
             )
 
-        # -----------------------------------------------------
-        # SELECT DATE
-        # -----------------------------------------------------
+        # -----------------------------
+        # Date selection
+        # -----------------------------
         def select_day(d: date):
             S.selected_date = d
             S.cal_year = d.year
             S.cal_month = d.month
             refresh()
 
-        # -----------------------------------------------------
-        # CALENDAR GRID (NO UI CHANGES)
-        # -----------------------------------------------------
+        # -----------------------------
+        # Calendar grid (no layout changes)
+        # -----------------------------
         def build_calendar_grid():
             y, m = S.cal_year, S.cal_month
             first = date(y, m, 1)
@@ -382,9 +379,9 @@ class CalendarPage:
 
             return ft.Column([header_row, ft.Container(height=8)] + rows, spacing=8)
 
-        # -----------------------------------------------------
-        # LEFT PANEL
-        # -----------------------------------------------------
+        # -----------------------------
+        # Left panel
+        # -----------------------------
         def build_left_panel():
             d = S.selected_date
             hol = holiday_name(d)
@@ -519,9 +516,9 @@ class CalendarPage:
                 ),
             )
 
-        # -----------------------------------------------------
-        # RIGHT PANEL (UNTOUCHED UI)
-        # -----------------------------------------------------
+        # -----------------------------
+        # Right panel (UI unchanged)
+        # -----------------------------
         def build_right_panel():
             y, m = S.cal_year, S.cal_month
             tasks_month = num_tasks_for_month(y, m)
@@ -597,9 +594,9 @@ class CalendarPage:
                 ),
             )
 
-        # -----------------------------------------------------
-        # GLOBAL LAYOUT
-        # -----------------------------------------------------
+        # -----------------------------
+        # Page layout
+        # -----------------------------
         board = ft.Container(
             expand=True,
             border_radius=22,

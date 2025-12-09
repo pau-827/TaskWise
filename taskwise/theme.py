@@ -33,18 +33,18 @@ THEMES = {
 # taskwise/theme.py
     "Dark Mode": {
         # App backgrounds
-        "BG_COLOR": "#0B1220",       # main app background
-        "FORM_BG": "#0F1A2C",        # panels / inner containers
-        "TEXT_PRIMARY": "#87BAC3",   # main readable text
-        "TEXT_SECONDARY": "#8ABEB9", # secondary text (still visible)
-        "BORDER_COLOR": "#B7E5CD",   # visible border on dark
-        "BUTTON_COLOR": "#8ABEB9",   # primary buttons, selected states
-        "SUCCESS_COLOR": "#22C55E",  # completed / success
-        "ERROR_COLOR": "#EF4444",    # overdue / error
+        "BG_COLOR": "#0B1220",       
+        "FORM_BG": "#0F1A2C",        
+        "TEXT_PRIMARY": "#87BAC3",   
+        "TEXT_SECONDARY": "#8ABEB9", 
+        "BORDER_COLOR": "#B7E5CD",   
+        "BUTTON_COLOR": "#8ABEB9",   
+        "SUCCESS_COLOR": "#22C55E",  
+        "ERROR_COLOR": "#EF4444",    
         "WARNING_COLOR": "#F59E0B",
         "INFO_COLOR": "#38BDF8",
-        "HEADER_BG": "#0A1426",       # top bar background
-        "HEADER_BORDER": "#22314B",   # optional, safe to have
+        "HEADER_BG": "#0A1426",       
+        "HEADER_BORDER": "#22314B",   
         "CHART_COLORS": ["#0EA5E9", "#16A34A", "#6D28D9"],
         "CHART_BG": "#FF8FB0",
         "CHART_TEXT": "#4A0B1F",

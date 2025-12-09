@@ -9,17 +9,17 @@ def get_admin_page(
     BUTTON_COLOR,
     BG_COLOR,
     FORM_BG,
-    on_logout=None,  # pass logout() from main
+    on_logout=None,  # logout() from main (optional)
 ):
     logs = db.get_logs()
 
-    # --- Users list (ban/delete icons) ---
+    # Load users (safe fallback to empty list)
     try:
         users = db.get_users()
     except Exception:
         users = []
 
-    # ✅ remove admin from users list
+    # Hide the admin account from the list
     filtered_users = []
     for u in users:
         role = ""
@@ -35,6 +35,7 @@ def get_admin_page(
             continue
         filtered_users.append(u)
 
+    # Quick snack message
     def show_message(text: str, color="red"):
         snack = ft.SnackBar(content=ft.Text(text), bgcolor=color, duration=2000)
         try:
@@ -45,6 +46,7 @@ def get_admin_page(
             page.snack_bar.open = True
         page.update()
 
+    # Rebuild the admin page (simple refresh)
     def refresh_admin():
         page.clean()
         page.add(
@@ -60,12 +62,11 @@ def get_admin_page(
         )
         page.update()
 
-    # ✅ logout icon: uses logout() from main if provided
+    # Logout button behavior (use callback if provided)
     def do_logout(e=None):
         if callable(on_logout):
             on_logout()
             return
-        # fallback if on_logout not provided
         try:
             page.session.clear()
         except Exception:
@@ -73,6 +74,7 @@ def get_admin_page(
         page.clean()
         page.update()
 
+    # Ban a user
     def ban_user(user_id: int):
         try:
             db.ban_user(int(user_id))
@@ -85,6 +87,7 @@ def get_admin_page(
         except Exception as ex:
             show_message(f"Ban failed: {ex}", "red")
 
+    # Unban a user
     def unban_user(user_id: int):
         try:
             db.unban_user(int(user_id))
@@ -97,7 +100,7 @@ def get_admin_page(
         except Exception as ex:
             show_message(f"Unban failed: {ex}", "red")
 
-    # ✅ FIXED: delete dialog attaches to page.overlay (trash icon works)
+    # Confirm delete (dialog is added to page.overlay so it opens reliably)
     def confirm_delete(user_id: int):
         if user_id is None:
             show_message("Delete failed: invalid user id.", "red")
@@ -139,16 +142,15 @@ def get_admin_page(
             shape=ft.RoundedRectangleBorder(radius=12),
         )
 
-        # IMPORTANT: attach dialog to overlay so it opens reliably in Flet
         if dlg not in page.overlay:
             page.overlay.append(dlg)
 
         dlg.open = True
         page.update()
 
-    # -------- USERS UI ITEMS --------
+    # ---------------- USERS UI ----------------
     user_items = []
-    # ✅ FIX: show continuous User ID numbers (1..n) in UI, while keeping real uid for actions
+    # Show 1..n in the UI, but still use the real uid for actions
     for display_id, u in enumerate(filtered_users, start=1):
         if isinstance(u, dict):
             uid = u.get("id")
@@ -201,7 +203,7 @@ def get_admin_page(
                                 ft.Row(
                                     spacing=8,
                                     controls=[
-                                        ft.Text(f"User ID: {display_id}", color=title_col, size=12),  # ✅ changed
+                                        ft.Text(f"User ID: {display_id}", color=title_col, size=12),
                                         ft.Text(
                                             status_text,
                                             color=ft.Colors.RED,
@@ -232,7 +234,7 @@ def get_admin_page(
             )
         )
 
-    # -------- LOGS UI ITEMS --------
+    # ---------------- LOGS UI ----------------
     log_items = []
     for log in logs:
         log_items.append(
@@ -253,7 +255,7 @@ def get_admin_page(
             )
         )
 
-    # --- ONE PAGE, split LEFT (Users) and RIGHT (Log History) ---
+    # ---------------- MAIN LAYOUT ----------------
     return ft.Container(
         padding=20,
         bgcolor=BG_COLOR,
@@ -262,7 +264,7 @@ def get_admin_page(
             expand=True,
             spacing=14,
             controls=[
-                # ✅ header with logout icon + refresh
+                # Top bar: logout + refresh
                 ft.Row(
                     alignment=ft.MainAxisAlignment.SPACE_BETWEEN,
                     vertical_alignment=ft.CrossAxisAlignment.CENTER,
@@ -271,7 +273,7 @@ def get_admin_page(
                             spacing=6,
                             controls=[
                                 ft.IconButton(
-                                    icon=ft.Icons.LOGOUT,  # ✅ logout (no back icon)
+                                    icon=ft.Icons.LOGOUT,
                                     tooltip="Logout",
                                     icon_color=PRIMARY_TEXT,
                                     on_click=do_logout,
@@ -296,7 +298,7 @@ def get_admin_page(
                     expand=True,
                     spacing=16,
                     controls=[
-                        # LEFT: USERS
+                        # Left: Users
                         ft.Container(
                             expand=True,
                             bgcolor=BG_COLOR,
@@ -318,7 +320,7 @@ def get_admin_page(
                                 ],
                             ),
                         ),
-                        # RIGHT: LOG HISTORY
+                        # Right: Log history
                         ft.Container(
                             expand=True,
                             bgcolor=BG_COLOR,

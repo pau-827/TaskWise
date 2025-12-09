@@ -5,7 +5,7 @@ from passlib.hash import bcrypt
 
 class SettingsPage:
     """
-    SETTINGS PAGE (wireframe-friendly, fully updated for new db.py)
+    Settings page (wireframe-friendly, updated for the current db.py)
     """
 
     def __init__(self, state):
@@ -15,24 +15,27 @@ class SettingsPage:
         S = self.S
         db = S.db
 
-        # -----------------------------------------------------
-        # COLOR HELPER
-        # -----------------------------------------------------
+        # -----------------------------
+        # Theme color shortcut
+        # -----------------------------
         def C(k: str) -> str:
             return S.colors.get(k, "#000000")
 
         def refresh():
+            # Re-render the page using the latest state/colors
             S.update()
 
-        # -----------------------------------------------------
-        # SAFE USER FETCH
-        # -----------------------------------------------------
+        # -----------------------------
+        # Get the current user safely
+        # -----------------------------
         def get_user_profile() -> dict:
+            # Default values when no user is logged in
             profile = {"id": None, "username": "Guest", "name": "Guest", "email": "Not signed in", "role": ""}
 
             if not S.user:
                 return profile
 
+            # Pull what we can from the session user object first
             if isinstance(S.user, dict):
                 profile["id"] = S.user.get("id")
                 profile["role"] = S.user.get("role", "")
@@ -40,21 +43,30 @@ class SettingsPage:
                 profile["name"] = S.user.get("name") or profile["username"] or profile["name"]
                 profile["email"] = S.user.get("email") or profile["email"]
 
+            # Try to refresh from DB (covers edge cases where session data is incomplete)
             try:
                 user_row = None
 
+                # Best option: fetch by id
                 if profile["id"] is not None:
                     if hasattr(db, "get_user_by_id"):
                         user_row = db.get_user_by_id(profile["id"])
                     elif hasattr(db, "get_user"):
                         user_row = db.get_user(profile["id"])
 
+                # Fallback: fetch by username
                 if user_row is None and profile["username"] and hasattr(db, "get_user_by_username"):
                     user_row = db.get_user_by_username(profile["username"])
 
-                if user_row is None and profile.get("email") not in (None, "", "Not signed in") and hasattr(db, "get_user_by_email"):
+                # Fallback: fetch by email
+                if (
+                    user_row is None
+                    and profile.get("email") not in (None, "", "Not signed in")
+                    and hasattr(db, "get_user_by_email")
+                ):
                     user_row = db.get_user_by_email(profile["email"])
 
+                # Normalize whatever format the DB returns (dict or tuple)
                 if user_row:
                     if isinstance(user_row, dict):
                         profile["id"] = user_row.get("id", profile["id"])
@@ -72,22 +84,23 @@ class SettingsPage:
                         if len(user_row) > 4 and user_row[4]:
                             profile["role"] = user_row[4]
             except Exception:
+                # Keep UI stable even if DB lookup fails
                 pass
 
             return profile
 
         profile = get_user_profile()
 
-        # -----------------------------------------------------
-        # DIALOG CLOSE
-        # -----------------------------------------------------
+        # -----------------------------
+        # Dialog close helper
+        # -----------------------------
         def close_dialog(dlg):
             dlg.open = False
             page.update()
 
-        # -----------------------------------------------------
-        # ACCOUNT DETAILS DIALOG
-        # -----------------------------------------------------
+        # -----------------------------
+        # Account details dialog
+        # -----------------------------
         def show_account_dialog():
             p = get_user_profile()
             if not S.user:
@@ -120,9 +133,9 @@ class SettingsPage:
             dlg.open = True
             page.update()
 
-        # -----------------------------------------------------
-        # DELETE ACCOUNT
-        # -----------------------------------------------------
+        # -----------------------------
+        # Delete account (password confirmation)
+        # -----------------------------
         def confirm_delete_account():
             p = get_user_profile()
             if not S.user or not p.get("id"):
@@ -144,12 +157,14 @@ class SettingsPage:
                 page.update()
 
             def do_delete(e):
+                # Require password input
                 if not password_field.value or not password_field.value.strip():
                     page.snack_bar = ft.SnackBar(content=ft.Text("Please enter your password."), bgcolor=C("ERROR_COLOR"))
                     page.snack_bar.open = True
                     page.update()
                     return
 
+                # Pull the latest user record for verification
                 user = None
                 try:
                     if hasattr(db, "get_user_by_id"):
@@ -165,6 +180,7 @@ class SettingsPage:
                     page.update()
                     return
 
+                # Extract password hash (supports dict or tuple returns)
                 password_hash = None
                 if isinstance(user, dict):
                     password_hash = user.get("password_hash") or user.get("password")
@@ -176,12 +192,14 @@ class SettingsPage:
                                 password_hash = v
                                 break
 
+                # Validate password
                 if not password_hash or not bcrypt.verify(password_field.value, password_hash):
                     page.snack_bar = ft.SnackBar(content=ft.Text("Incorrect password."), bgcolor=C("ERROR_COLOR"))
                     page.snack_bar.open = True
                     page.update()
                     return
 
+                # Delete the user and their related data
                 try:
                     if hasattr(db, "delete_user"):
                         db.delete_user(p["id"])
@@ -199,6 +217,7 @@ class SettingsPage:
                 dlg.open = False
                 page.update()
 
+                # Logout / clear user state after delete
                 try:
                     if hasattr(S, "on_user_logout"):
                         S.on_user_logout()
@@ -209,6 +228,7 @@ class SettingsPage:
                 page.snack_bar.open = True
                 page.update()
 
+                # Try to navigate to a reasonable page name
                 def safe_go(name: str) -> bool:
                     try:
                         if hasattr(S, "go"):
@@ -258,9 +278,9 @@ class SettingsPage:
             dlg.open = True
             page.update()
 
-        # -----------------------------------------------------
-        # CHANGE PASSWORD
-        # -----------------------------------------------------
+        # -----------------------------
+        # Change password dialog
+        # -----------------------------
         def show_change_password_dialog():
             current_tf = ft.TextField(
                 hint_text="Current Password",
@@ -282,6 +302,7 @@ class SettingsPage:
             )
 
             def _extract_user_id_and_hash(user_obj, fallback_id):
+                # Normalize user row formats to: (user_id, password_hash)
                 if isinstance(user_obj, dict):
                     uid = user_obj.get("id", fallback_id)
                     ph = user_obj.get("password_hash") or user_obj.get("password")
@@ -306,6 +327,7 @@ class SettingsPage:
                     page.update()
                     return
 
+                # Try to pull user from DB using id first
                 user = None
                 try:
                     if hasattr(db, "get_user_by_id"):
@@ -315,6 +337,7 @@ class SettingsPage:
                 except Exception:
                     user = None
 
+                # Fallback to email lookup if needed
                 if not user:
                     email_lookup = (p.get("email") or "").strip()
                     if email_lookup and email_lookup != "Not signed in" and hasattr(db, "get_user_by_email"):
@@ -337,12 +360,14 @@ class SettingsPage:
                     page.update()
                     return
 
+                # Verify current password
                 if not bcrypt.verify(current_tf.value or "", password_hash):
                     page.snack_bar = ft.SnackBar(content=ft.Text("Incorrect current password."), bgcolor=C("ERROR_COLOR"))
                     page.snack_bar.open = True
                     page.update()
                     return
 
+                # New password checks
                 if (new_tf.value or "") != (confirm_tf.value or ""):
                     page.snack_bar = ft.SnackBar(content=ft.Text("Passwords do not match."), bgcolor=C("ERROR_COLOR"))
                     page.snack_bar.open = True
@@ -355,6 +380,7 @@ class SettingsPage:
                     page.update()
                     return
 
+                # Save hashed password
                 new_hash = bcrypt.hash(new_tf.value)
 
                 try:
@@ -390,9 +416,9 @@ class SettingsPage:
             dlg.open = True
             page.update()
 
-        # -----------------------------------------------------
-        # THEME DROPDOWN
-        # -----------------------------------------------------
+        # -----------------------------
+        # Theme dropdown
+        # -----------------------------
         theme_dd = ft.Dropdown(
             value=getattr(S, "theme_name", None) or "Light Mode",
             options=[
@@ -406,9 +432,9 @@ class SettingsPage:
             on_change=lambda e: (S.set_theme(theme_dd.value), refresh()),
         )
 
-        # -----------------------------------------------------
-        # USER PROFILE CARD
-        # -----------------------------------------------------
+        # -----------------------------
+        # Profile card (top)
+        # -----------------------------
         profile = get_user_profile()
         user_name = (profile.get("name") or profile.get("username") or "Guest").strip() or "Guest"
         user_email = (profile.get("email") or "").strip()
@@ -451,9 +477,9 @@ class SettingsPage:
             ),
         )
 
-        # -----------------------------------------------------
-        # LEFT PANEL TILE COMPONENT
-        # -----------------------------------------------------
+        # -----------------------------
+        # Tile component used in the left panel
+        # -----------------------------
         def tile(icon, title, subtitle="", right_control=None, on_click=None):
             return ft.Container(
                 border_radius=16,
@@ -489,9 +515,9 @@ class SettingsPage:
                 ),
             )
 
-        # -----------------------------------------------------
-        # LEFT PANEL STACK (LOGOUT REMOVED)
-        # -----------------------------------------------------
+        # -----------------------------
+        # Left panel content (logout removed)
+        # -----------------------------
         settings_stack = ft.Column(
             spacing=14,
             controls=[
@@ -505,9 +531,9 @@ class SettingsPage:
             ],
         )
 
-        # -----------------------------------------------------
-        # RIGHT PANEL
-        # -----------------------------------------------------
+        # -----------------------------
+        # Right panel (tips)
+        # -----------------------------
         preview_panel = ft.Container(
             expand=True,
             border_radius=22,
@@ -550,9 +576,9 @@ class SettingsPage:
             ),
         )
 
-        # -----------------------------------------------------
-        # PAGE LAYOUT
-        # -----------------------------------------------------
+        # -----------------------------
+        # Page layout
+        # -----------------------------
         settings_scroll = ft.Column(
             expand=True,
             scroll=ft.ScrollMode.AUTO,

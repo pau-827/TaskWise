@@ -1,6 +1,6 @@
 import flet as ft
 from passlib.hash import bcrypt
-from vault import get_secret     # ← NEW (Secret Config)
+from vault import get_secret  # secrets from .env / vault
 import admin
 import db
 from taskwise.app import run_taskwise_app
@@ -8,9 +8,9 @@ from admin import get_admin_page
 
 
 def main(page: ft.Page):
-    # ----------------------------------
-    # INITIAL PAGE SETTINGS
-    # ----------------------------------
+    # -----------------------------
+    # Page setup
+    # -----------------------------
     page.title = "TaskWise"
     page.theme_mode = ft.ThemeMode.LIGHT
     page.padding = 0
@@ -18,24 +18,24 @@ def main(page: ft.Page):
     page.window_height = 600
     page.scroll = None
 
-    # Initialize DB
+    # -----------------------------
+    # Database startup
+    # -----------------------------
     db.init_db()
     try:
         print("USING DB:", db.get_db_path())
     except:
         pass
 
-    # ----------------------------------
-    # SECURE CONFIG (from .env / encrypted ENC(...))
-    # ----------------------------------
+    # -----------------------------
+    # App secrets (safe defaults)
+    # -----------------------------
     ADMIN_EMAIL = get_secret("ADMIN_EMAIL", "admin@taskwise.com")
-    # You can also preload other secrets here later if needed:
-    # API_KEY = get_secret("API_KEY")
-    # SERVICE_URL = get_secret("SERVICE_URL")
+    # Add more secrets here later if needed.
 
-    # ----------------------------------
-    # COLOR SCHEME
-    # ----------------------------------
+    # -----------------------------
+    # Colors
+    # -----------------------------
     BG_COLOR = "#F8F6F4"
     FORM_BG = "#E3F4F4"
     BUTTON_COLOR = "#D2E9E9"
@@ -44,9 +44,9 @@ def main(page: ft.Page):
     SECONDARY_TEXT = "#6B8F97"
     SUCCESS_GREEN = "#4CAF50"
 
-    # ----------------------------------
-    # SNACKBAR
-    # ----------------------------------
+    # -----------------------------
+    # Quick message popup
+    # -----------------------------
     def show_message(text: str, color="red"):
         snack = ft.SnackBar(content=ft.Text(text), bgcolor=color, duration=2000)
         try:
@@ -57,9 +57,9 @@ def main(page: ft.Page):
             page.snack_bar.open = True
         page.update()
 
-    # ----------------------------------
-    # FORM FIELD
-    # ----------------------------------
+    # -----------------------------
+    # Reusable text field style
+    # -----------------------------
     def styled_field(label, password=False):
         return ft.TextField(
             label=label,
@@ -74,9 +74,9 @@ def main(page: ft.Page):
             content_padding=ft.padding.only(left=10, right=10, top=5, bottom=5),
         )
 
-    # ----------------------------------
-    # UI HELPERS
-    # ----------------------------------
+    # -----------------------------
+    # Small UI helpers
+    # -----------------------------
     def pill(text, icon):
         return ft.Container(
             padding=ft.padding.symmetric(horizontal=12, vertical=8),
@@ -175,9 +175,9 @@ def main(page: ft.Page):
         card.on_hover = on_hover
         return card
 
-    # ----------------------------------
-    # CONTACT ADMIN DIALOG
-    # ----------------------------------
+    # -----------------------------
+    # Contact admin popup
+    # -----------------------------
     def show_contact_admin_dialog(e=None):
         dlg = ft.AlertDialog(modal=True)
         page.dialog = dlg
@@ -221,9 +221,9 @@ def main(page: ft.Page):
         dlg.open = True
         page.update()
 
-    # ----------------------------------
-    # SAFE SWITCH TO MAIN APP
-    # ----------------------------------
+    # -----------------------------
+    # Switch into the main app UI
+    # -----------------------------
     def switch_to_taskwise_app():
         try:
             page.views.clear()
@@ -247,9 +247,9 @@ def main(page: ft.Page):
         page.update()
         run_taskwise_app(page, on_logout=logout)
 
-    # ----------------------------------
-    # NAVIGATION
-    # ----------------------------------
+    # -----------------------------
+    # Simple navigation helpers
+    # -----------------------------
     def show_front_page():
         page.clean()
         page.add(front_page_view)
@@ -264,6 +264,7 @@ def main(page: ft.Page):
 
     def show_contact_admin_page():
         from contact_admin import contact_admin_page
+
         page.clean()
         ui = contact_admin_page(page, go_back_callback=show_front_page)
         page.add(ui)
@@ -277,9 +278,9 @@ def main(page: ft.Page):
         page.session.clear()
         show_front_page()
 
-    # ----------------------------------
-    # SIGNUP + LOGIN FIELDS
-    # ----------------------------------
+    # -----------------------------
+    # Signup + login fields
+    # -----------------------------
     name_field = styled_field("Name")
     email_field = styled_field("Email")
     password_field = styled_field("Password", password=True)
@@ -288,9 +289,9 @@ def main(page: ft.Page):
     login_email_field = styled_field("Email")
     login_password_field = styled_field("Password", password=True)
 
-    # ----------------------------------
-    # SIGNUP LOGIC
-    # ----------------------------------
+    # -----------------------------
+    # Signup handler
+    # -----------------------------
     def handle_signup(e):
         name = (name_field.value or "").strip()
         email = (email_field.value or "").strip().lower()
@@ -326,10 +327,9 @@ def main(page: ft.Page):
         except Exception as ex:
             show_message(f"Signup failed: {ex}")
 
-    # ----------------------------------
-    # ADMIN PANEL
-    # ----------------------------------
-
+    # -----------------------------
+    # Admin panel
+    # -----------------------------
     def show_admin(e=None):
         page.clean()
         page.add(
@@ -340,15 +340,14 @@ def main(page: ft.Page):
                 BUTTON_COLOR,
                 BG_COLOR,
                 FORM_BG,
-                on_logout=logout,  # ✅ PASS logout callback
+                on_logout=logout,  # logout callback
             )
         )
         page.update()
 
-
-    # ----------------------------------
-    # LOGIN LOGIC
-    # ----------------------------------
+    # -----------------------------
+    # Login handler
+    # -----------------------------
     def handle_login(e):
         email = (login_email_field.value or "").strip().lower()
         pw = login_password_field.value or ""
@@ -362,7 +361,7 @@ def main(page: ft.Page):
             if not user:
                 show_message("Invalid email or password.")
                 return
-            
+
             if user.get("is_banned"):
                 show_message("Your account is banned. Contact admin.")
                 return
@@ -392,9 +391,9 @@ def main(page: ft.Page):
         except Exception as ex:
             show_message(f"Login failed: {ex}")
 
-    # ----------------------------------
-    # HEADERS
-    # ----------------------------------
+    # -----------------------------
+    # Header builders
+    # -----------------------------
     def create_front_header():
         return ft.Container(
             padding=ft.padding.symmetric(horizontal=22, vertical=10),
@@ -437,9 +436,9 @@ def main(page: ft.Page):
             ),
         )
 
-    # ----------------------------------
-    # SIDE PANELS
-    # ----------------------------------
+    # -----------------------------
+    # Side panels
+    # -----------------------------
     signup_sidebar = ft.Container(
         padding=15,
         content=ft.Column(
@@ -504,9 +503,9 @@ def main(page: ft.Page):
         ),
     )
 
-    # ----------------------------------
-    # FRONT PAGE VIEW (scrollable + fixed "What You Get" header)
-    # ----------------------------------
+    # -----------------------------
+    # Front page (scrollable)
+    # -----------------------------
     front_page_view = ft.Container(
         expand=True,
         content=ft.Stack(
@@ -521,7 +520,6 @@ def main(page: ft.Page):
                         colors=["#F8F6F4", "#EAF6F6", "#F8F6F4"],
                     ),
                 ),
-
                 # Decorative circles
                 ft.Container(
                     left=-220,
@@ -539,8 +537,7 @@ def main(page: ft.Page):
                     border_radius=999,
                     bgcolor="#C4DFDF55",
                 ),
-
-                # Content (ListView handles scroll automatically when window is small)
+                # Main content
                 ft.ListView(
                     expand=True,
                     spacing=0,
@@ -613,7 +610,6 @@ def main(page: ft.Page):
                                                         ],
                                                     ),
                                                 ),
-
                                                 # RIGHT PREVIEW CARD
                                                 ft.Container(
                                                     col={"xs": 12, "sm": 12, "md": 4, "lg": 4, "xl": 4},
@@ -703,10 +699,8 @@ def main(page: ft.Page):
                                                 ),
                                             ],
                                         ),
-
                                         ft.Container(height=20),
-
-                                        # "What You Get" header (fixed alignment)
+                                        # "What You Get" header
                                         ft.Row(
                                             controls=[
                                                 ft.Container(
@@ -726,7 +720,6 @@ def main(page: ft.Page):
                                                 ),
                                             ],
                                         ),
-
                                         # Feature Cards
                                         ft.ResponsiveRow(
                                             columns=12,
@@ -770,9 +763,9 @@ def main(page: ft.Page):
         ),
     )
 
-    # ----------------------------------
-    # SIGNUP VIEW
-    # ----------------------------------
+    # -----------------------------
+    # Signup view
+    # -----------------------------
     signup_view = ft.Container(
         bgcolor=BG_COLOR,
         expand=True,
@@ -830,9 +823,9 @@ def main(page: ft.Page):
         ),
     )
 
-    # ----------------------------------
-    # LOGIN VIEW
-    # ----------------------------------
+    # -----------------------------
+    # Login view
+    # -----------------------------
     login_view = ft.Container(
         bgcolor=BG_COLOR,
         expand=True,
@@ -892,7 +885,7 @@ def main(page: ft.Page):
         ),
     )
 
-    # Start at landing page
+    # start at the landing page
     show_front_page()
 
 

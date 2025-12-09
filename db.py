@@ -3,29 +3,29 @@ from passlib.hash import bcrypt
 from datetime import datetime
 from vault import get_secret
 
-# -------------------------------------------------------------
-# Secure Configuration (from .env / encrypted .env)
-# -------------------------------------------------------------
+# -----------------------------
+# Secure config (from vault/.env)
+# -----------------------------
 DB_NAME = get_secret("DB_NAME", "taskwise.db")
 ADMIN_DEFAULT_PASSWORD = get_secret("ADMIN_DEFAULT_PASSWORD", "Admin123")
 
-# -------------------------------------------------------------
-# Utility
-# -------------------------------------------------------------
+# -----------------------------
+# DB helpers
+# -----------------------------
 def get_db_path():
     return DB_NAME
 
 def connect():
     return sqlite3.connect(DB_NAME, check_same_thread=False)
 
-# -------------------------------------------------------------
-# Database Initialization
-# -------------------------------------------------------------
+# -----------------------------
+# Database setup + migrations
+# -----------------------------
 def init_db():
     conn = connect()
     cursor = conn.cursor()
 
-    # USERS TABLE — updated to match your UI (name + email + password_hash)
+    # Users table (matches the UI fields)
     cursor.execute("""
         CREATE TABLE IF NOT EXISTS users (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -38,7 +38,7 @@ def init_db():
         )
     """)
 
-    # ✅ SAFE MIGRATIONS (SQLite cannot add non-constant defaults)
+    # Safe column upgrades (SQLite has limits on ALTER defaults)
     cursor.execute("PRAGMA table_info(users)")
     cols = [row[1] for row in cursor.fetchall()]
 
@@ -46,12 +46,10 @@ def init_db():
         cursor.execute("ALTER TABLE users ADD COLUMN is_banned INTEGER DEFAULT 0")
 
     if "created_at" not in cols:
-        # add column WITHOUT default (SQLite restriction)
         cursor.execute("ALTER TABLE users ADD COLUMN created_at TIMESTAMP")
-        # backfill existing rows
         cursor.execute("UPDATE users SET created_at = CURRENT_TIMESTAMP WHERE created_at IS NULL")
 
-    # TASKS TABLE — per user
+    # Tasks table (linked to users)
     cursor.execute("""
         CREATE TABLE IF NOT EXISTS tasks (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -67,7 +65,7 @@ def init_db():
         )
     """)
 
-    # PER-USER SETTINGS
+    # Per-user settings table
     cursor.execute("""
         CREATE TABLE IF NOT EXISTS app_settings (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -79,7 +77,7 @@ def init_db():
         )
     """)
 
-    # SYSTEM LOGS
+    # Logs table (admin/user actions)
     cursor.execute("""
         CREATE TABLE IF NOT EXISTS logs (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -93,7 +91,7 @@ def init_db():
 
     conn.commit()
 
-    # Create default admin if not exists (admin@taskwise.com)
+    # Create the default admin account once
     cursor.execute("SELECT * FROM users WHERE email = 'admin@taskwise.com'")
     if not cursor.fetchone():
         cursor.execute(
@@ -101,7 +99,7 @@ def init_db():
             (
                 "Admin",
                 "admin@taskwise.com",
-                bcrypt.hash(ADMIN_DEFAULT_PASSWORD),  # ← SECRET USED HERE
+                bcrypt.hash(ADMIN_DEFAULT_PASSWORD),
                 "admin",
                 0,
             )
@@ -110,9 +108,9 @@ def init_db():
 
     conn.close()
 
-# -------------------------------------------------------------
-# User Functions
-# -------------------------------------------------------------
+# -----------------------------
+# User functions
+# -----------------------------
 def create_user(name, email, password_hash, role="user"):
     try:
         conn = connect()
@@ -203,7 +201,9 @@ def update_user_password(user_id, new_password_hash):
     conn.commit()
     conn.close()
 
-# --- Admin: Users list + ban/unban + delete ---
+# -----------------------------
+# Admin: user list + ban/delete
+# -----------------------------
 def get_users():
     conn = connect()
     cursor = conn.cursor()
@@ -244,7 +244,7 @@ def delete_user(user_id):
     conn = connect()
     cursor = conn.cursor()
 
-    # delete related data first
+    # Remove related rows first, then the user row
     cursor.execute("DELETE FROM tasks WHERE user_id = ?", (user_id,))
     cursor.execute("DELETE FROM app_settings WHERE user_id = ?", (user_id,))
     cursor.execute("DELETE FROM logs WHERE user_id = ?", (user_id,))
@@ -257,9 +257,9 @@ def is_user_banned(email):
     u = get_user_by_email(email)
     return bool(u and u.get("is_banned"))
 
-# -------------------------------------------------------------
-# Logging
-# -------------------------------------------------------------
+# -----------------------------
+# Logs
+# -----------------------------
 def add_log(action, details="", user_id=None):
     conn = connect()
     cursor = conn.cursor()
@@ -301,9 +301,9 @@ def get_logs():
         })
     return logs
 
-# -------------------------------------------------------------
-# Task Functions (per-user isolated)
-# -------------------------------------------------------------
+# -----------------------------
+# Tasks (per user)
+# -----------------------------
 def add_task(user_id, title, description="", category="", due_date=""):
     conn = connect()
     cursor = conn.cursor()
@@ -357,9 +357,9 @@ def delete_task(user_id, task_id):
     conn.commit()
     conn.close()
 
-# -------------------------------------------------------------
-# Per-User Settings
-# -------------------------------------------------------------
+# -----------------------------
+# Per-user settings
+# -----------------------------
 def set_setting(user_id, key, value):
     conn = connect()
     cursor = conn.cursor()
@@ -387,7 +387,7 @@ def get_setting(user_id, key, default=None):
 
     val = row[0]
 
-    # Boolean normalization for switches
+    # Convert stored strings into real booleans for switches
     if isinstance(default, bool):
         s = str(val).strip().lower()
         if s in ("1", "true", "yes", "y", "on"):

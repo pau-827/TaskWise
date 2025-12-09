@@ -266,16 +266,9 @@ class TaskWiseApp:
             ],
         )
 
-        # ----------------------------
-        # UPDATED HERE ↓↓↓
         # Move bell AFTER username + profile icon
-        # ----------------------------
         if self.state.user:
-            username = (
-                self.state.user.get("username")
-                or self.state.user.get("name")
-                or "User"
-            ).strip()
+            username = (self.state.user.get("username") or self.state.user.get("name") or "User").strip()
 
             user_label = ft.Text(
                 username,

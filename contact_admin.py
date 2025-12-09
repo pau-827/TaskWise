@@ -30,14 +30,10 @@ def contact_admin_page(page: ft.Page, go_back_callback):
     header = ft.Column(
         [
             ft.Text("Contact Admins", size=28, weight="bold", color=theme["TEXT_PRIMARY"]),
-
             ft.TextButton(
                 "← Back",
-                on_click=lambda e: go_back_callback(),    # 💥 now REALLY calls main.py's function
-                style=ft.ButtonStyle(
-                    color=theme["TEXT_PRIMARY"],
-                    padding=10
-                ),
+                on_click=lambda e: go_back_callback(),  # calls main.py's function
+                style=ft.ButtonStyle(color=theme["TEXT_PRIMARY"], padding=10),
             ),
         ],
         alignment=ft.MainAxisAlignment.START,
@@ -65,28 +61,21 @@ def contact_admin_page(page: ft.Page, go_back_callback):
                     spacing=6,
                     alignment=ft.MainAxisAlignment.CENTER,
                     horizontal_alignment=ft.CrossAxisAlignment.CENTER,
-                )
+                ),
             )
         )
 
     cards_centered = ft.Container(
         expand=True,
         alignment=ft.alignment.center,
-        content=ft.Row(
-            controls=cards,
-            alignment=ft.MainAxisAlignment.CENTER,
-            spacing=20
-        )
+        content=ft.Row(controls=cards, alignment=ft.MainAxisAlignment.CENTER, spacing=20),
     )
 
     # FOOTER
     footer = ft.Container(
         content=ft.Text("All rights reserved ©2025", color=theme["TEXT_SECONDARY"]),
         alignment=ft.alignment.center,
-        padding=20
+        padding=20,
     )
 
-    return ft.Column(
-        expand=True,
-        controls=[header, cards_centered, footer]
-    )
+    return ft.Column(expand=True, controls=[header, cards_centered, footer])

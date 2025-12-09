@@ -1055,7 +1055,7 @@ class TaskPage:
                             value=val,
                             title=f"{label} {pct:.0f}%",
                             radius=62,
-                            color=chart_palette[color_i % len(chart_palette)],  # ✅ changed
+                            color=chart_palette[color_i % len(chart_palette)],
                             title_style=ft.TextStyle(size=10, color=ft.Colors.WHITE, weight=ft.FontWeight.BOLD),
                         )
                     )
@@ -1149,7 +1149,8 @@ class TaskPage:
                                 ft.Text(f"{int(progress * 100)}%", size=12, color=C("TEXT_SECONDARY")),
                             ],
                         ),
-                        ft.ProgressBar(value=progress, bgcolor="#DDEFEF", color=C("#147272")),
+                        # ✅ FIX: color should be a real color, not C("#147272")
+                        ft.ProgressBar(value=progress, bgcolor="#DDEFEF", color=C("BUTTON_COLOR")),
                         ft.Row(
                             spacing=10,
                             controls=[
