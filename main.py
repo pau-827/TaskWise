@@ -712,12 +712,6 @@ def main(page: ft.Page):
                                                         color=PRIMARY_TEXT,
                                                     ),
                                                 ),
-                                                ft.Text(
-                                                    "Simple tools that keep you consistent.",
-                                                    size=13,
-                                                    color=SECONDARY_TEXT,
-                                                    text_align=ft.TextAlign.RIGHT,
-                                                ),
                                             ],
                                         ),
                                         # Feature Cards
