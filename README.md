@@ -229,24 +229,29 @@ flet run main.py
 
 ### Screenshot of our Interface
 #### Admin View
-**Front Page**
+- Front Page
 ![alt text](assets/front_page.png)
+
 **Admnin View**
-Screenshots of the admin side of TaskWise where the admin can manage users (view, ban/unban, delete) and review system logs.
+- Screenshots of the admin side of TaskWise where the admin can manage users (view, ban/unban, delete) and review system logs.
 ![alt text](assets/admin1.png)
 ![alt text](assets/admin2.png)
+
 **User View**
-Screenshots of the user side of TaskWise where users can create, edit, delete, search, categorize, and complete tasks, plus view tasks on the calendar and manage settings.
+- Screenshots of the user side of TaskWise where users can create, edit, delete, search, categorize, and complete tasks, plus view tasks on the calendar and manage settings.
 ![alt text](assets/signin.png)
 ![alt text](assets/login.png)
 ![alt text](assets/taskpage.png)
 ![alt text](assets/calendar.png)
 ![alt text](assets/settings.png)
-Screenshots showing TaskWise themes (Light Mode, Dark Mode, and Pink) so users can see how the app looks and feels in each style.
+
+- Screenshots showing TaskWise themes (Light Mode, Dark Mode, and Pink) so users can see how the app looks and feels in each style.
 **Light Mode**
 ![alt text](assets/taskpage.png)
+
 **Dark Mode**
 ![alt text](assets/darkmode.png)
+
 **Pink Mode**
 ![alt text](assets/pinkmode.png)
 ---
