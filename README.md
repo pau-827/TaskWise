@@ -401,3 +401,9 @@ I worked on the UI of our TaskWise app by building and improving the main screen
 During this project, my primary work was in documentation and quality assurance. I needed to work on writing the Software Requirements Specification, the README file, and assist in validation to ensure all was understandable and accurate in the project. I paid special attention to simplifying the documents and structured them in such a way that the team and any reader of the documents could trace the system goals and features.The difficulty in maintaining documentation as the project was evolving was one of the challenges. Need used to change as we kept on discussing ideas and, therefore, I had to change some parts several times. The other difficulty was to ensure that the validation process identified the mistakes timely, and this demanded reading and paying attention to details. During the project, I got to know that good documentation is important and serves to keep the entire team on track. I also enhanced my teamwork abilities by communicating regularly with group members and requesting feedback. Problems in documentation also helped me to understand that I should seek inconsistencies, vague statements, and so on.To make it better next time, I would develop a better structure at the beginning, revise the documents more frequently, and establish a more streamlined system to review the changes as the project progresses.
 
 ---
+
+## Special Thanks to ChatGPT for:
+- Helping us debug errors that doesn't display on the terminal.
+- Helping in merging changes when there are simultaneous updates in a single code file from other members.
+- Suggesting enhancements (adding features for user experience)
+- Confirming if our ideas are possible or too complicated, and which approach should we go for and is safe.
