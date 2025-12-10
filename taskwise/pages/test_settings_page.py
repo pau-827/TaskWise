@@ -4,11 +4,6 @@ from pathlib import Path
 import flet as ft
 from passlib.hash import bcrypt
 
-# ------------------------------------------------------------
-# Import SettingsPage + THEMES in a way that works:
-# 1) python -m taskwise.pages.test_settings_page  (best)
-# 2) python taskwise/pages/test_settings_page.py  (still works)
-# ------------------------------------------------------------
 try:
     # Works when run as a module
     from .settings_page import SettingsPage
@@ -21,7 +16,6 @@ except ImportError:
 
     from taskwise.pages.settings_page import SettingsPage
     from taskwise.theme import THEMES
-
 
 # -----------------------------
 # Fake DB for testing SettingsPage (matches current settings_page.py expectations)
