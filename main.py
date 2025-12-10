@@ -1,8 +1,8 @@
 import flet as ft
-from passlib.hash import bcrypt
-from vault import get_secret  # secrets from .env / vault
 import admin
 import db
+from passlib.hash import bcrypt
+from vault import get_secret
 from taskwise.app import run_taskwise_app
 from admin import get_admin_page
 
@@ -31,7 +31,6 @@ def main(page: ft.Page):
     # App secrets (safe defaults)
     # -----------------------------
     ADMIN_EMAIL = get_secret("ADMIN_EMAIL", "admin@taskwise.com")
-    # Add more secrets here later if needed.
 
     # -----------------------------
     # Colors
