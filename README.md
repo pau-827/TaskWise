@@ -227,6 +227,28 @@ flet run main.py
 - Desktop (Windows/macOS/Linux) via Python + Flet
 - Web/browser (if your deployment setup supports it)
 
+### Screenshot of our Interface
+#### Admin View
+**Front Page**
+![alt text](assets/front_page.png)
+**Admnin View**
+Screenshots of the admin side of TaskWise where the admin can manage users (view, ban/unban, delete) and review system logs.
+![alt text](assets/admin1.png)
+![alt text](assets/admin2.png)
+**User View**
+Screenshots of the user side of TaskWise where users can create, edit, delete, search, categorize, and complete tasks, plus view tasks on the calendar and manage settings.
+![alt text](assets/signin.png)
+![alt text](assets/login.png)
+![alt text](assets/taskpage.png)
+![alt text](assets/calendar.png)
+![alt text](assets/settings.png)
+Screenshots showing TaskWise themes (Light Mode, Dark Mode, and Pink) so users can see how the app looks and feels in each style.
+**Light Mode**
+![alt text](assets/taskpage.png)
+**Dark Mode**
+![alt text](assets/darkmode.png)
+**Pink Mode**
+![alt text](assets/pinkmode.png)
 ---
 
 ## 7) Due Date/Time Format (Important)
@@ -323,9 +345,9 @@ git push origin main
 
 ## 13) Individual Reflection (Template: 150–200 words each)
 
-**(To be written)**
+**Panliboton, Ayelyn Janne F.**  
+I worked on the UI of our TaskWise app by building and improving the main screens like Tasks, Calendar, and Settings, and making sure the buttons, dialogs (Add/Edit/Delete), task cards, filters, and notification badge looked clean and easy to use. The biggest challenges for me were keeping the screen updates smooth without flickering, especially during search and filtering, and fixing display issues like time formatting and due date reminders that sometimes did not show correctly.Also, I learned more about how Flet handles state, page updates, and overlays, and I improved my debugging by checking values step-by-step and tracing where the refresh should happen instead of guessing. Teamwork also helped because I had to align my UI work with the database fields and the features my groupmates handled. Next time, I would improve consistency in spacing and text styles, test more edge cases early, and add clearer UI feedback for actions like saving, deleting, and notification updates. 
 
-**[Name]**  
 Write 150–200 words about:
 - What you worked on
 - Challenges you faced

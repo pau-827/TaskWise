@@ -5,15 +5,6 @@ from taskwise.theme import get_theme, THEMES
 
 
 class AppState:
-    """
-    Shared application state. Pages receive an AppState instance
-    and use it for DB access, theme colors, user, calendar state, etc.
-
-    Important:
-      - Call app_state.on_user_login(user_dict) after successful login
-        where user_dict is {"id": ..., "username": ..., "role": ...}
-      - Call app_state.on_user_logout() on logout.
-    """
 
     def __init__(self):
         # db is the module; functions are called like:
@@ -48,7 +39,6 @@ class AppState:
         self._update_callback = fn
 
     def update(self):
-        """Force UI refresh (used by pages and app shell)."""
         if self._update_callback:
             self._update_callback()
 
@@ -60,10 +50,6 @@ class AppState:
     # login/logout helpers
     # -----------------------
     def on_user_login(self, user: dict):
-        """
-        Call this when the user successfully logs in.
-        user should be a dict returned by db.login_user, e.g. {"id":1, "username":"bob", "role":"user"}
-        """
         self.user = user
 
         # Load per-user theme
@@ -82,7 +68,6 @@ class AppState:
         self.update()
 
     def on_user_logout(self):
-        """Reset all user-specific state."""
         self.user = None
 
         self.theme_name = "Light Mode"
@@ -94,7 +79,6 @@ class AppState:
     # theme/settings helpers
     # -----------------------
     def set_theme(self, theme_name: str):
-        """Change theme in memory and persist per-user if logged in."""
 
         if theme_name not in THEMES:
             theme_name = "Light Mode"
