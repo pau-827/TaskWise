@@ -241,11 +241,15 @@ flet run main.py
 - Screenshots of the user side of TaskWise where users can create, edit, delete, search, categorize, and complete tasks, plus view tasks on the calendar and manage settings.
 ![alt text](assets/signin.png)
 ![alt text](assets/login.png)
+**Task Page**
 ![alt text](assets/taskpage.png)
+**Calendar Page**
 ![alt text](assets/calendar.png)
+**Settings Page**
 ![alt text](assets/settings.png)
 
-- Screenshots showing TaskWise themes (Light Mode, Dark Mode, and Pink) so users can see how the app looks and feels in each style.
+Screenshots showing TaskWise themes (Light Mode, Dark Mode, and Pink) so users can see how the app looks and feels in each style.
+
 **Light Mode**
 ![alt text](assets/taskpage.png)
 
