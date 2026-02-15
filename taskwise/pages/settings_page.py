@@ -22,8 +22,12 @@ class SettingsPage:
             return S.colors.get(k, "#000000")
 
         def refresh():
-            # Re-render the page using the latest state/colors
-            S.update()
+            # ask TaskWiseApp to re-render using the callback
+            if hasattr(S, "_update_callback") and callable(S._update_callback):
+                S._update_callback()
+            else:
+                page.update()
+
 
         # -----------------------------
         # Get the current user safely
@@ -302,16 +306,25 @@ class SettingsPage:
                 filled=True,
             )
 
+            def toast(msg: str, color_key: str = "ERROR_COLOR"):
+                page.snack_bar = ft.SnackBar(content=ft.Text(msg), bgcolor=C(color_key))
+                page.snack_bar.open = True
+                page.update()
+
             def _extract_user_id_and_hash(user_obj, fallback_id):
-                # Normalize user row formats to: (user_id, password_hash)
+                # dict format
                 if isinstance(user_obj, dict):
                     uid = user_obj.get("id", fallback_id)
                     ph = user_obj.get("password_hash") or user_obj.get("password")
                     return uid, ph
 
+                # tuple/list format
                 uid = user_obj[0] if len(user_obj) > 0 else fallback_id
+
+                # common index used in your code
                 ph = user_obj[3] if len(user_obj) > 3 else None
 
+                # fallback: find bcrypt hash in any column
                 if not ph:
                     for v in user_obj:
                         if isinstance(v, str) and v.startswith("$2"):
@@ -320,15 +333,50 @@ class SettingsPage:
 
                 return uid, ph
 
+            def _update_password_in_db(user_id: int, new_hash: str) -> bool:
+                """
+                Tries common db function names.
+                Return True if any update method works.
+                """
+                # Most likely in your project
+                if hasattr(db, "update_user_password"):
+                    db.update_user_password(user_id, new_hash)
+                    return True
+
+                # Common alternatives
+                if hasattr(db, "update_password"):
+                    db.update_password(user_id, new_hash)
+                    return True
+
+                if hasattr(db, "change_password"):
+                    db.change_password(user_id, new_hash)
+                    return True
+
+                return False
+
             def save(e):
                 p = get_user_profile()
                 if not S.user or not p.get("id"):
-                    page.snack_bar = ft.SnackBar(content=ft.Text("Please login first."), bgcolor=C("ERROR_COLOR"))
-                    page.snack_bar.open = True
-                    page.update()
+                    toast("Please login first.")
                     return
 
-                # Try to pull user from DB using id first
+                cur = (current_tf.value or "").strip()
+                newp = (new_tf.value or "").strip()
+                conf = (confirm_tf.value or "").strip()
+
+                if not cur or not newp or not conf:
+                    toast("Please fill in all password fields.")
+                    return
+
+                if newp != conf:
+                    toast("Passwords do not match.")
+                    return
+
+                if len(newp) < 6:
+                    toast("New password must be at least 6 characters.")
+                    return
+
+                # Fetch latest user row
                 user = None
                 try:
                     if hasattr(db, "get_user_by_id"):
@@ -338,7 +386,7 @@ class SettingsPage:
                 except Exception:
                     user = None
 
-                # Fallback to email lookup if needed
+                # fallback by email
                 if not user:
                     email_lookup = (p.get("email") or "").strip()
                     if email_lookup and email_lookup != "Not signed in" and hasattr(db, "get_user_by_email"):
@@ -348,54 +396,43 @@ class SettingsPage:
                             user = None
 
                 if not user:
-                    page.snack_bar = ft.SnackBar(content=ft.Text("Account not found."), bgcolor=C("ERROR_COLOR"))
-                    page.snack_bar.open = True
-                    page.update()
+                    toast("Account not found.")
                     return
 
                 user_id, password_hash = _extract_user_id_and_hash(user, p["id"])
-
                 if not password_hash:
-                    page.snack_bar = ft.SnackBar(content=ft.Text("Password data missing."), bgcolor=C("ERROR_COLOR"))
-                    page.snack_bar.open = True
-                    page.update()
+                    toast("Password data missing.")
                     return
 
                 # Verify current password
-                if not bcrypt.verify(current_tf.value or "", password_hash):
-                    page.snack_bar = ft.SnackBar(content=ft.Text("Incorrect current password."), bgcolor=C("ERROR_COLOR"))
-                    page.snack_bar.open = True
-                    page.update()
+                try:
+                    ok = bcrypt.verify(cur, password_hash)
+                except Exception:
+                    ok = False
+
+                if not ok:
+                    toast("Incorrect current password.")
                     return
 
-                # New password checks
-                if (new_tf.value or "") != (confirm_tf.value or ""):
-                    page.snack_bar = ft.SnackBar(content=ft.Text("Passwords do not match."), bgcolor=C("ERROR_COLOR"))
-                    page.snack_bar.open = True
-                    page.update()
+                # Hash and save new password
+                try:
+                    new_hash = bcrypt.hash(newp)
+                except Exception:
+                    toast("Failed to hash password.")
                     return
-
-                if not (new_tf.value or "").strip():
-                    page.snack_bar = ft.SnackBar(content=ft.Text("Password cannot be empty."), bgcolor=C("ERROR_COLOR"))
-                    page.snack_bar.open = True
-                    page.update()
-                    return
-
-                # Save hashed password
-                new_hash = bcrypt.hash(new_tf.value)
 
                 try:
-                    db.update_user_password(user_id, new_hash)
-                except Exception:
-                    page.snack_bar = ft.SnackBar(content=ft.Text("Failed to update password."), bgcolor=C("ERROR_COLOR"))
-                    page.snack_bar.open = True
-                    page.update()
+                    updated = _update_password_in_db(int(user_id), new_hash)
+                    if not updated:
+                        toast("Password update function not found in db.py.")
+                        return
+                except Exception as ex:
+                    toast(f"Failed to update password: {ex}")
                     return
 
-                page.snack_bar = ft.SnackBar(content=ft.Text("Password updated!"), bgcolor=C("SUCCESS_COLOR"))
                 dlg.open = False
-                page.snack_bar.open = True
                 page.update()
+                toast("Password updated!", "SUCCESS_COLOR")
 
             dlg = ft.AlertDialog(
                 modal=True,
@@ -403,7 +440,6 @@ class SettingsPage:
                 title=ft.Text("Change Password", weight=ft.FontWeight.BOLD, color=C("TEXT_PRIMARY")),
                 content=ft.Container(
                     width=480,
-                    height=170,
                     padding=8,
                     content=ft.Column([current_tf, new_tf, confirm_tf], spacing=12),
                 ),
@@ -413,9 +449,11 @@ class SettingsPage:
                 ],
                 shape=ft.RoundedRectangleBorder(radius=16),
             )
+
             page.overlay.append(dlg)
             dlg.open = True
             page.update()
+
 
         # -----------------------------
         # Theme dropdown
