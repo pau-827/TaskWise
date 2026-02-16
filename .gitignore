@@ -13,6 +13,9 @@ venv/
 # Temporary files created by VS Code Code Runner
 tempCodeRunnerFile.py
 
+.env
+.vault_key
+
 # Optional
 *.sqlite3
 *.db
