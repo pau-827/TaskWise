@@ -1,5 +1,5 @@
 import flet as ft
-import db
+from database import db
 
 
 def get_admin_page(

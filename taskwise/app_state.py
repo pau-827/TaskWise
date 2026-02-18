@@ -1,5 +1,5 @@
 # taskwise/app_state.py
-import db
+from database import db
 from datetime import datetime
 from taskwise.theme import get_theme, THEMES
 

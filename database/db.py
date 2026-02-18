@@ -1,7 +1,8 @@
 import sqlite3
 from passlib.hash import bcrypt
 from datetime import datetime
-from vault import get_secret
+from app.vault import get_secret
+
 
 # -----------------------------
 # Secure config (from vault/.env)

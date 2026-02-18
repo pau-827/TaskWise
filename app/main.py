@@ -1,10 +1,12 @@
 import flet as ft
-import admin
-import db
 from passlib.hash import bcrypt
-from vault import get_secret
+
+from app.admin import get_admin_page
+from app.vault import get_secret
+from app.contact_admin import contact_admin_page
+
+from database import db
 from taskwise.app import run_taskwise_app
-from admin import get_admin_page
 
 
 def main(page: ft.Page):
@@ -262,8 +264,6 @@ def main(page: ft.Page):
         page.add(login_view)
 
     def show_contact_admin_page():
-        from contact_admin import contact_admin_page
-
         page.clean()
         ui = contact_admin_page(page, go_back_callback=show_front_page)
         page.add(ui)
