@@ -2,7 +2,7 @@ import sqlite3
 from passlib.hash import bcrypt
 from datetime import datetime
 from app.vault import get_secret
-
+from taskwise.theme import CATEGORIES
 
 # -----------------------------
 # Secure config (from vault/.env)
@@ -302,15 +302,60 @@ def get_logs():
         })
     return logs
 
+# Helper Function
+def _generate_untitled_name(user_id):
+    conn = connect()
+    cursor = conn.cursor()
+
+    cursor.execute("""
+        SELECT title FROM tasks
+        WHERE user_id=? AND title LIKE 'Untitled%'
+    """, (user_id,))
+
+    existing_titles = [row[0] for row in cursor.fetchall()]
+    conn.close()
+
+    used_numbers = set()
+
+    for t in existing_titles:
+        t = (t or "").strip()
+
+        if t == "Untitled":
+            used_numbers.add(0)
+        elif t.startswith("Untitled(") and t.endswith(")"):
+            try:
+                num = int(t[len("Untitled("):-1])
+                used_numbers.add(num)
+            except:
+                pass
+
+    i = 0
+    while i in used_numbers:
+        i += 1
+
+    return "Untitled" if i == 0 else f"Untitled({i})"
+
 # -----------------------------
 # Tasks (per user)
 # -----------------------------
 def add_task(user_id, title, description="", category="", due_date=""):
+    title = (title or "").strip()
+    description = (description or "").strip()
+    category = (category or "").strip()
+
+    # AUTO TITLE LOGIC (GAP REUSE)
+    if not title:
+        title = _generate_untitled_name(user_id)
+
+    # CATEGORY VALIDATION
+    if not category:
+        category = "Others"
+
     conn = connect()
     cursor = conn.cursor()
     cursor.execute(
         "INSERT INTO tasks (user_id, title, description, category, due_date) VALUES (?, ?, ?, ?, ?)",
-        (user_id, title, description, category, due_date)
+        (user_id, title, description, category, due_date),
     )
     conn.commit()
     conn.close()
@@ -329,16 +374,14 @@ def get_tasks_by_user(user_id):
     return rows
 
 def update_task(user_id, task_id, title, description, category, due_date, status):
-    conn = connect()
-    cursor = conn.cursor()
-    cursor.execute("""
-        UPDATE tasks SET
-            title=?, description=?, category=?, due_date=?, status=?,
-            updated_at=CURRENT_TIMESTAMP
-        WHERE id=? AND user_id=?
-    """, (title, description, category, due_date, status, task_id, user_id))
-    conn.commit()
-    conn.close()
+    title = (title or "").strip()
+    category = (category or "").strip()
+
+    if not title:
+        title = _generate_untitled_name(user_id)
+
+    if not category:
+        category = "Others"
 
 def update_task_status(user_id, task_id, status):
     conn = connect()

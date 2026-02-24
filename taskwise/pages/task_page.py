@@ -300,7 +300,7 @@ class TaskPage:
         if self._due_date_picker not in page.overlay:
             page.overlay.append(self._due_date_picker)
 
-        # ✅ Ensure TimePicker exists and is in overlay
+        # Ensure TimePicker exists and is in overlay
         if not self._due_time_picker:
             self._due_time_picker = ft.TimePicker()
         if self._due_time_picker not in page.overlay:
@@ -338,7 +338,7 @@ class TaskPage:
                 ),
             )
 
-        # ✅ FIX: add border_color option so we can force readable chips
+        # FIX: add border_color option so we can force readable chips
         def small_tag(text: str, bgcolor: str, fg: str = "white", border_color: Optional[str] = None):
             return ft.Container(
                 padding=ft.padding.symmetric(horizontal=10, vertical=6),
@@ -470,7 +470,7 @@ class TaskPage:
                 color=C("TEXT_PRIMARY"),
             )
 
-            # ✅ Time field (12h)
+            # Time field (12h)
             time_tf = ft.TextField(
                 hint_text="Time (Pick From Clock)",
                 read_only=True,
@@ -501,7 +501,7 @@ class TaskPage:
                 self._due_date_picker.open = True
                 page.update()
 
-            # ✅ Time picker open (set 12h AM/PM)
+            # Time picker open (set 12h AM/PM)
             def open_time_picker(e):
                 def on_time_change(ev):
                     picked = self._due_time_picker.value
@@ -532,12 +532,6 @@ class TaskPage:
                 due = due_date_part
                 if due_date_part and due_time_part:
                     due = f"{due_date_part} {due_time_part}"
-
-                if not title:
-                    page.snack_bar = ft.SnackBar(content=ft.Text("Title is required."), bgcolor=C("ERROR_COLOR"))
-                    page.snack_bar.open = True
-                    page.update()
-                    return
 
                 picked = self._safe_parse_date(due)
                 if picked:
@@ -669,7 +663,7 @@ class TaskPage:
                 color=C("TEXT_PRIMARY"),
             )
 
-            # ✅ Time field (12h)
+            # Time field (12h)
             time_tf = ft.TextField(
                 read_only=True,
                 value=(old_time_part or "").strip(),
@@ -700,7 +694,7 @@ class TaskPage:
                 self._due_date_picker.open = True
                 page.update()
 
-            # ✅ Time picker open (set 12h AM/PM)
+            # Time picker open (set 12h AM/PM)
             def open_time_picker(e):
                 def on_time_change(ev):
                     picked = self._due_time_picker.value
@@ -731,12 +725,6 @@ class TaskPage:
                 due = due_date_part
                 if due_date_part and due_time_part:
                     due = f"{due_date_part} {due_time_part}"
-
-                if not title:
-                    page.snack_bar = ft.SnackBar(content=ft.Text("Title cannot be empty."), bgcolor=C("ERROR_COLOR"))
-                    page.snack_bar.open = True
-                    page.update()
-                    return
 
                 picked = self._safe_parse_date(due)
                 if picked:
