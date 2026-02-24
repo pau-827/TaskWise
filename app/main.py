@@ -46,10 +46,11 @@ def main(page: ft.Page):
     SUCCESS_GREEN = "#4CAF50"
 
     # -----------------------------
-    # Quick message popup
+    # Quick message popup (with suggestions)
     # -----------------------------
-    def show_message(text: str, color="red"):
-        snack = ft.SnackBar(content=ft.Text(text), bgcolor=color, duration=2000)
+    def show_message(text: str, color="red", suggestion: str = None):
+        full_text = text if not suggestion else f"{text}\n\nSuggestion: {suggestion}"
+        snack = ft.SnackBar(content=ft.Text(full_text), bgcolor=color, duration=4000)
         try:
             page.overlay.append(snack)
             snack.open = True
@@ -297,34 +298,42 @@ def main(page: ft.Page):
         pw = password_field.value or ""
         pw2 = confirm_password_field.value or ""
 
+        # -----------------------------
+        # Validation checks with suggestions
+        # -----------------------------
         if not name or not email or not pw or not pw2:
-            show_message("Please fill in all fields.")
-            return
-        if pw != pw2:
-            show_message("Passwords do not match.")
-            return
-        if len(pw) < 8:
-            show_message("Password must be at least 8 characters.")
+            show_message("Please fill in all fields.", suggestion="Double-check that you entered your name, email, and both passwords.")
             return
 
+        if pw != pw2:
+            show_message("Passwords do not match.", suggestion="Make sure both password fields are identical.")
+            return
+
+        if len(pw) < 8:
+            show_message("Password must be at least 8 characters.", suggestion="Try adding numbers or symbols for stronger security.")
+            return
+
+        # -----------------------------
+        # Continue with signup logic
+        # -----------------------------
         try:
             if db.get_user_by_email(email):
-                show_message("Email is already registered.")
+                show_message("Email is already registered.", suggestion="Try logging in instead, or use a different email.")
                 return
 
             pw_hash = bcrypt.hash(pw)
             created = db.create_user(name, email, pw_hash)
             if not created:
-                show_message("Account creation failed. Try again.")
+                show_message("Account creation failed. Try again.", suggestion="Check your internet connection or try a different email.")
                 return
 
             db.add_log("Signup", f"New user: {email}", None)
-
-            show_message("Account created! You can now log in.", SUCCESS_GREEN)
+            show_message("Account created! You can now log in.", SUCCESS_GREEN, suggestion="Click 'Log In' to access your account.")
             show_login_page()
 
         except Exception as ex:
-            show_message(f"Signup failed: {ex}")
+            show_message(f"Signup failed: {ex}", suggestion="Please retry or contact admin if the issue persists.")
+
 
     # -----------------------------
     # Admin panel
@@ -351,24 +360,31 @@ def main(page: ft.Page):
         email = (login_email_field.value or "").strip().lower()
         pw = login_password_field.value or ""
 
+        # -----------------------------
+        # Validation checks with suggestions
+        # -----------------------------
         if not email or not pw:
-            show_message("Please enter email and password.")
+            show_message("Please enter email and password.", suggestion="Both fields are required to log in.")
             return
 
         try:
             user = db.get_user_by_email(email)
+
             if not user:
-                show_message("Invalid email or password.")
+                show_message("Invalid email or password.", suggestion="Check for typos or sign up if you don’t have an account.")
                 return
 
             if user.get("is_banned"):
-                show_message("Your account is banned. Contact admin.")
+                show_message("Your account is banned. Contact admin.", suggestion="Use the 'Contact Admin' option for support.")
                 return
 
             if not bcrypt.verify(pw, user["password_hash"]):
-                show_message("Invalid email or password.")
+                show_message("Invalid email or password.", suggestion="Try resetting your password if you forgot it.")
                 return
 
+            # -----------------------------
+            # Continue with login logic
+            # -----------------------------
             page.session.set("user_id", user["id"])
             page.session.set("user_name", user["name"])
             page.session.set("user_role", user["role"])
@@ -388,7 +404,8 @@ def main(page: ft.Page):
             )
 
         except Exception as ex:
-            show_message(f"Login failed: {ex}")
+            show_message(f"Login failed: {ex}", suggestion="Please retry or contact admin if the issue persists.")
+
 
     # -----------------------------
     # Header builders
