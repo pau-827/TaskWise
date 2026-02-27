@@ -8,14 +8,12 @@ from taskwise.theme import CATEGORIES  # ["Personal","Work","Study","Others","Bi
 class TaskPage:
     """
     CONNECTED TASK PAGE (Fixed):
-    - Pie chart empty when no tasks.
-    - Pie chart updates with category + percentage when tasks change.
-    - Search works without blinking (no full rebuild on each keystroke).
-    - Replaces "..." menu with Edit/Delete icons.
-    - Delete asks for confirmation.
-    - Removes calendar icon beside delete icon on task cards.
-    - Adds "..." menu on category row for sorting: Title, Due Date, Date Created, Custom.
-    - Adds drag icon and enables drag-to-reorder tasks (Custom order).
+    - No white “flash” on refresh: hosts are created ONCE and only their content is replaced.
+    - Loader overlay uses theme colors (no sudden pure-white panel).
+    - Prevents double actions while loading.
+    - Safe snackbars on failures.
+    - Keeps: pie empty state, search without flicker, edit/delete, confirm delete,
+      sorting menu, drag-to-reorder for Custom, DatePicker + TimePicker.
     """
 
     def __init__(self, state):
@@ -30,8 +28,6 @@ class TaskPage:
         self._filter_pill: Optional[ft.Container] = None
 
         self._due_date_picker: Optional[ft.DatePicker] = None
-
-        # ✅ add TimePicker (for due time)
         self._due_time_picker: Optional[ft.TimePicker] = None
 
         # small “movement” on refresh (rotate chart)
@@ -39,6 +35,15 @@ class TaskPage:
 
         # Custom ordering (drag-to-reorder)
         self._custom_order_ids: List[int] = []
+
+        # Loading overlay
+        self._loading_overlay: Optional[ft.Container] = None
+        self._is_loading: bool = False
+
+        # build functions placeholders (set in view)
+        self._build_task_list = None
+        self._build_analytics_panel = None
+        self._build_filter_bar = None
 
     # ---------------------------
     # Utilities
@@ -57,17 +62,10 @@ class TaskPage:
 
     @staticmethod
     def _normalize_time_str(s: str) -> str:
-        """
-        Accepts:
-          - HH:MM   (24h)
-          - H:MM AM/PM  (12h)
-        Returns 12h string: h:MM AM/PM, or "" if invalid.
-        """
         s = (s or "").strip()
         if not s:
             return ""
 
-        # already AM/PM?
         upper = s.upper()
         if "AM" in upper or "PM" in upper:
             try:
@@ -76,7 +74,6 @@ class TaskPage:
             except Exception:
                 return ""
 
-        # try 24h HH:MM
         try:
             hh, mm = s.split(":", 1)
             hour = int(hh)
@@ -90,20 +87,11 @@ class TaskPage:
 
     @staticmethod
     def _safe_parse_date(s: Optional[str]) -> Optional[date]:
-        """
-        Accepts:
-          - YYYY-MM-DD
-          - YYYY-MM-DD HH:MM
-          - YYYY-MM-DD hh:MM AM/PM
-          - YYYY-MM-DDTHH:MM
-        Returns date or None.
-        """
         try:
             s = (s or "").strip()
             if not s:
                 return None
 
-            # Strip time portion if present
             if " " in s:
                 s = s.split(" ", 1)[0]
             if "T" in s:
@@ -115,34 +103,22 @@ class TaskPage:
 
     @staticmethod
     def _safe_parse_datetime(s: Optional[str]) -> Optional[datetime]:
-        """
-        Accepts:
-          - YYYY-MM-DD
-          - YYYY-MM-DD HH:MM
-          - YYYY-MM-DD hh:MM AM/PM
-          - YYYY-MM-DDTHH:MM
-        Returns datetime or None.
-        """
         try:
             s = (s or "").strip()
             if not s:
                 return None
 
-            # Normalize "T" separator
             s = s.replace("T", " ")
 
-            # Try common formats (12h first so "1:18 PM" works)
             for fmt in ("%Y-%m-%d %I:%M %p", "%Y-%m-%d %H:%M", "%Y-%m-%d"):
                 try:
                     dt = datetime.strptime(s, fmt)
                     if fmt == "%Y-%m-%d":
-                        # If only date, treat as end of day for due/overdue logic
                         return datetime(dt.year, dt.month, dt.day, 23, 59)
                     return dt
                 except Exception:
                     continue
 
-            # last attempt
             try:
                 return datetime.fromisoformat(s)
             except Exception:
@@ -159,23 +135,81 @@ class TaskPage:
             control.update()
 
     # ---------------------------
+    # Loading helpers
+    # ---------------------------
+    def _ensure_loader(self, page: ft.Page, C):
+        if self._loading_overlay:
+            return
+
+        # Use theme-based panel colors to avoid white flashing
+        overlay_panel_bg = C("FORM_BG") or "#FFFFFF"
+        overlay_text = C("TEXT_PRIMARY") or "#111111"
+        overlay_border = C("BORDER_COLOR") or "#DDDDDD"
+
+        self._loading_overlay = ft.Container(
+            visible=False,
+            expand=True,
+            bgcolor="#00000055",
+            alignment=ft.alignment.center,
+            content=ft.Container(
+                padding=18,
+                border_radius=16,
+                bgcolor=overlay_panel_bg,
+                border=ft.border.all(1, overlay_border),
+                content=ft.Column(
+                    tight=True,
+                    horizontal_alignment=ft.CrossAxisAlignment.CENTER,
+                    spacing=10,
+                    controls=[
+                        ft.ProgressRing(),
+                        ft.Text("Loading...", size=12, color=overlay_text),
+                    ],
+                ),
+            ),
+        )
+
+    def _set_loading(self, page: ft.Page, value: bool):
+        self._is_loading = value
+        if self._loading_overlay:
+            self._loading_overlay.visible = value
+            self._safe_update(self._loading_overlay)
+        else:
+            page.update()
+
+    def _snack(self, page: ft.Page, text: str, color: str):
+        page.snack_bar = ft.SnackBar(content=ft.Text(text), bgcolor=color)
+        page.snack_bar.open = True
+        page.update()
+
+    def _run_with_loading(self, page: ft.Page, fn, on_error_message: str, error_color: str, success_fn=None):
+        if self._is_loading:
+            return
+        self._set_loading(page, True)
+        try:
+            fn()
+            if success_fn:
+                success_fn()
+        except Exception:
+            self._snack(page, on_error_message, error_color)
+        finally:
+            self._set_loading(page, False)
+
+    # ---------------------------
     # Sorting / Ordering helpers
     # ---------------------------
     def _get_sort_mode(self) -> str:
-        return getattr(self.state, "current_sort", "Custom")  # default to Custom
+        return getattr(self.state, "current_sort", "Custom")
 
     def _set_sort_mode(self, mode: str):
         self.state.current_sort = mode
 
     def _ensure_custom_order(self, tasks: List[tuple]):
-        """Ensure custom order list contains all task IDs (and only existing ones)."""
-        ids = [t[0] for t in tasks]  # task_id at index 0
+        ids = [t[0] for t in tasks]
         current = [i for i in self._custom_order_ids if i in ids]
         missing = [i for i in ids if i not in current]
         self._custom_order_ids = current + missing
 
     def _sort_tasks(self, tasks: List[tuple]) -> List[tuple]:
-        """Apply sort mode to tasks list."""
         mode = self._get_sort_mode()
 
         if mode == "Title (A-Z)":
@@ -186,13 +220,13 @@ class TaskPage:
         if mode == "Due Date":
 
             def due_key(t):
-                dt = self._safe_parse_datetime(t[4])  # due_date index 4
+                dt = self._safe_parse_datetime(t[4])
                 return (dt is None, dt or datetime.max)
 
             return sorted(tasks, key=due_key)
 
         if mode == "Date Created":
-            # created_at index 6 (string); parse if possible, otherwise keep stable
+
             def created_key(t):
                 s = (t[6] or "").strip()
                 try:
@@ -202,7 +236,6 @@ class TaskPage:
 
             return sorted(tasks, key=created_key, reverse=True)
 
-        # Custom: use drag order
         self._ensure_custom_order(tasks)
         order_index = {tid: idx for idx, tid in enumerate(self._custom_order_ids)}
         return sorted(tasks, key=lambda t: order_index.get(t[0], 10**9))
@@ -234,9 +267,7 @@ class TaskPage:
 
             tasks = [t for t in tasks if ok(t)]
 
-        # apply sort
-        tasks = self._sort_tasks(tasks)
-        return tasks
+        return self._sort_tasks(tasks)
 
     def _is_overdue(self, due_date_str: Optional[str], status: str) -> bool:
         if not due_date_str or (status or "").strip().lower() != "pending":
@@ -245,41 +276,40 @@ class TaskPage:
         return bool(dt and dt < datetime.now())
 
     # ---------------------------
-    # Refresh helpers (only update mounted controls)
+    # Refresh helpers (NO rebuild of hosts)
     # ---------------------------
     def _refresh_task_list(self, page: ft.Page):
-        if not self._mounted(self._task_list_host):
+        if not (self._task_list_host and self._build_task_list):
             return
         self._task_list_host.content = self._build_task_list(page)
         self._safe_update(self._task_list_host)
 
     def _refresh_analytics(self, page: ft.Page):
-        if not self._mounted(self._analytics_host):
+        if not (self._analytics_host and self._build_analytics_panel):
             return
         self._analytics_host.content = self._build_analytics_panel(page)
         self._safe_update(self._analytics_host)
 
-    def _refresh_filter_ui(self, page: ft.Page):
-        S = self.state
-        current = getattr(S, "current_filter", "All Tasks")
+    def _refresh_filter_ui(self, page: ft.Page, C):
+        current = getattr(self.state, "current_filter", "All Tasks")
 
-        if self._mounted(self._filter_pill):
+        if self._filter_pill:
             self._filter_pill.content = ft.Text(current, size=11, color="white", weight=ft.FontWeight.W_600)
             self._safe_update(self._filter_pill)
 
-        if self._mounted(self._filter_chip_row):
+        if self._filter_chip_row and self._build_filter_bar:
             self._filter_chip_row.content = self._build_filter_bar(page)
             self._safe_update(self._filter_chip_row)
 
-    def _refresh_all(self, page: ft.Page):
-        self._refresh_filter_ui(page)
+    def _refresh_all(self, page: ft.Page, C):
+        self._refresh_filter_ui(page, C)
         self._refresh_task_list(page)
         self._refresh_analytics(page)
 
     # ---------------------------
-    # Search handler (no flicker)
+    # Search handler
     # ---------------------------
-    def _on_search_change(self, e, page: ft.Page):
+    def _on_search_change(self, e, page: ft.Page, C):
         self.search_query = e.control.value or ""
         self._refresh_task_list(page)
 
@@ -290,17 +320,23 @@ class TaskPage:
         S = self.state
         db = S.db
 
-        # Colors
         def C(k: str) -> str:
             return S.colors.get(k, "#000000")
 
-        # Ensure DatePicker exists and is in overlay
+        # Theme-safe surfaces (remove pure white flashes)
+        CARD_BG = S.colors.get("CARD_BG", C("FORM_BG") if C("FORM_BG") else "#FFFFFF")
+        INPUT_BG = S.colors.get("INPUT_BG", C("BG_COLOR") if C("BG_COLOR") else "#FFFFFF")
+
+        # Ensure loader exists
+        self._ensure_loader(page, C)
+
+        # Ensure DatePicker in overlay
         if not self._due_date_picker:
             self._due_date_picker = ft.DatePicker()
         if self._due_date_picker not in page.overlay:
             page.overlay.append(self._due_date_picker)
 
-        # Ensure TimePicker exists and is in overlay
+        # Ensure TimePicker in overlay
         if not self._due_time_picker:
             self._due_time_picker = ft.TimePicker()
         if self._due_time_picker not in page.overlay:
@@ -326,7 +362,7 @@ class TaskPage:
             return ft.Container(
                 padding=ft.padding.symmetric(horizontal=14, vertical=8),
                 border_radius=999,
-                bgcolor=C("BUTTON_COLOR") if active else "white",
+                bgcolor=C("BUTTON_COLOR") if active else CARD_BG,
                 border=ft.border.all(1, C("BORDER_COLOR")),
                 ink=True,
                 on_click=on_click,
@@ -338,7 +374,6 @@ class TaskPage:
                 ),
             )
 
-        # FIX: add border_color option so we can force readable chips
         def small_tag(text: str, bgcolor: str, fg: str = "white", border_color: Optional[str] = None):
             return ft.Container(
                 padding=ft.padding.symmetric(horizontal=10, vertical=6),
@@ -354,7 +389,7 @@ class TaskPage:
                 value=val,
                 hint_text="Select Category",
                 options=[ft.dropdown.Option(x) for x in CATEGORIES],
-                bgcolor=C("BG_COLOR"),
+                bgcolor=INPUT_BG,
                 filled=True,
                 border_color=C("BORDER_COLOR"),
                 border_radius=12,
@@ -363,11 +398,13 @@ class TaskPage:
             )
 
         # ---------------------------
-        # Sort menu ("..." on category row)
+        # Sort menu
         # ---------------------------
         def sort_menu_button():
             def set_sort(mode: str):
                 def _h(e):
+                    if self._is_loading:
+                        return
                     self._set_sort_mode(mode)
                     if mode == "Custom":
                         current_tasks = self._get_filtered_tasks()
@@ -399,22 +436,26 @@ class TaskPage:
 
             def do_delete(e):
                 if not S.user:
-                    page.snack_bar = ft.SnackBar(content=ft.Text("No user logged in."), bgcolor=C("ERROR_COLOR"))
-                    page.snack_bar.open = True
-                    page.update()
+                    self._snack(page, "No user logged in.", C("ERROR_COLOR"))
                     return
 
-                db.delete_task(S.user["id"], task_id)
-                self._custom_order_ids = [i for i in self._custom_order_ids if i != task_id]
+                def work():
+                    db.delete_task(S.user["id"], task_id)
+                    self._custom_order_ids = [i for i in self._custom_order_ids if i != task_id]
 
-                dlg.open = False
-                page.update()
+                def after():
+                    dlg.open = False
+                    page.update()
+                    self._snack(page, "Task deleted!", C("SUCCESS_COLOR"))
+                    self._refresh_all(page, C)
 
-                page.snack_bar = ft.SnackBar(content=ft.Text("Task deleted!"), bgcolor=C("SUCCESS_COLOR"))
-                page.snack_bar.open = True
-                page.update()
-
-                self._refresh_all(page)
+                self._run_with_loading(
+                    page=page,
+                    fn=work,
+                    on_error_message="Delete failed. Please try again.",
+                    error_color=C("ERROR_COLOR"),
+                    success_fn=after,
+                )
 
             dlg = ft.AlertDialog(
                 modal=True,
@@ -438,7 +479,7 @@ class TaskPage:
         def show_add_task_dialog():
             title_tf = ft.TextField(
                 hint_text="Task Title",
-                bgcolor=C("BG_COLOR"),
+                bgcolor=INPUT_BG,
                 filled=True,
                 border_color=C("BORDER_COLOR"),
                 border_radius=12,
@@ -450,7 +491,7 @@ class TaskPage:
                 multiline=True,
                 min_lines=2,
                 max_lines=4,
-                bgcolor=C("BG_COLOR"),
+                bgcolor=INPUT_BG,
                 filled=True,
                 border_color=C("BORDER_COLOR"),
                 border_radius=12,
@@ -463,19 +504,18 @@ class TaskPage:
                 hint_text="Due Date (Pick From Calendar)",
                 read_only=True,
                 value=self._fmt_date(S.selected_date) if S.selected_date else "",
-                bgcolor=C("BG_COLOR"),
+                bgcolor=INPUT_BG,
                 filled=True,
                 border_color=C("BORDER_COLOR"),
                 border_radius=12,
                 color=C("TEXT_PRIMARY"),
             )
 
-            # Time field (12h)
             time_tf = ft.TextField(
                 hint_text="Time (Pick From Clock)",
                 read_only=True,
                 value="",
-                bgcolor=C("BG_COLOR"),
+                bgcolor=INPUT_BG,
                 filled=True,
                 border_color=C("BORDER_COLOR"),
                 border_radius=12,
@@ -501,7 +541,6 @@ class TaskPage:
                 self._due_date_picker.open = True
                 page.update()
 
-            # Time picker open (set 12h AM/PM)
             def open_time_picker(e):
                 def on_time_change(ev):
                     picked = self._due_time_picker.value
@@ -517,18 +556,31 @@ class TaskPage:
 
             def save_task(e):
                 if not S.user:
-                    page.snack_bar = ft.SnackBar(content=ft.Text("No user logged in."), bgcolor=C("ERROR_COLOR"))
-                    page.snack_bar.open = True
-                    page.update()
+                    self._snack(page, "No user logged in.", C("ERROR_COLOR"))
                     return
 
                 title = (title_tf.value or "").strip()
-                desc = (desc_tf.value or "").strip()
                 cat = (category_dd.value or "").strip()
+                if not title:
+                    self._snack(page, "Task name is required. Please enter a title.", C("ERROR_COLOR"))
+                    return
+                if len(title) < 3:
+                    self._snack(page, "Task name is too short. Please enter at least 3 characters.", C("ERROR_COLOR"))
+                    return
+                if len(title) > 80:
+                    self._snack(page, "Task name is too long. Please keep it under 80 characters.", C("ERROR_COLOR"))
+                    return
+                if not cat:
+                    self._snack(page, "Category is required. Please select one.", C("ERROR_COLOR"))
+                    return
+
+                desc = (desc_tf.value or "").strip()
+                if len(desc) > 250:
+                    self._snack(page, "Description is too long. Please keep it under 250 characters.", C("ERROR_COLOR"))
+                    return
 
                 due_date_part = (due_tf.value or "").strip()
                 due_time_part = (time_tf.value or "").strip()
-
                 due = due_date_part
                 if due_date_part and due_time_part:
                     due = f"{due_date_part} {due_time_part}"
@@ -539,20 +591,27 @@ class TaskPage:
                     S.cal_year = picked.year
                     S.cal_month = picked.month
 
-                db.add_task(S.user["id"], title, desc, cat, due)
+                def work():
+                    db.add_task(S.user["id"], title, desc, cat, due)
 
-                dialog.open = False
-                page.update()
+                def after():
+                    dialog.open = False
+                    page.update()
+                    self._snack(page, "Task added!", C("SUCCESS_COLOR"))
 
-                page.snack_bar = ft.SnackBar(content=ft.Text("Task added!"), bgcolor=C("SUCCESS_COLOR"))
-                page.snack_bar.open = True
-                page.update()
+                    if self._get_sort_mode() == "Custom":
+                        current_tasks = self._get_filtered_tasks()
+                        self._ensure_custom_order(current_tasks)
 
-                if self._get_sort_mode() == "Custom":
-                    current_tasks = self._get_filtered_tasks()
-                    self._ensure_custom_order(current_tasks)
+                    self._refresh_all(page, C)
 
-                self._refresh_all(page)
+                self._run_with_loading(
+                    page=page,
+                    fn=work,
+                    on_error_message="Save failed. Please check your inputs and try again.",
+                    error_color=C("ERROR_COLOR"),
+                    success_fn=after,
+                )
 
             def close(e):
                 dialog.open = False
@@ -572,14 +631,22 @@ class TaskPage:
                             ft.Row(
                                 [
                                     ft.Container(due_tf, expand=True),
-                                    ft.IconButton(icon=ft.Icons.CALENDAR_MONTH, icon_color=C("TEXT_PRIMARY"), on_click=open_picker),
+                                    ft.IconButton(
+                                        icon=ft.Icons.CALENDAR_MONTH,
+                                        icon_color=C("TEXT_PRIMARY"),
+                                        on_click=open_picker,
+                                    ),
                                 ],
                                 spacing=10,
                             ),
                             ft.Row(
                                 [
                                     ft.Container(time_tf, expand=True),
-                                    ft.IconButton(icon=ft.Icons.ACCESS_TIME, icon_color=C("TEXT_PRIMARY"), on_click=open_time_picker),
+                                    ft.IconButton(
+                                        icon=ft.Icons.ACCESS_TIME,
+                                        icon_color=C("TEXT_PRIMARY"),
+                                        on_click=open_time_picker,
+                                    ),
                                 ],
                                 spacing=10,
                             ),
@@ -624,13 +691,12 @@ class TaskPage:
                 old_date_part = parts[0]
                 old_time_part = " ".join(parts[1:]).strip()
 
-            # normalize stored time to 12h for display
             old_time_part = self._normalize_time_str(old_time_part)
 
             title_tf = ft.TextField(
                 value=old_title,
                 hint_text="Task Title",
-                bgcolor=C("BG_COLOR"),
+                bgcolor=INPUT_BG,
                 filled=True,
                 border_color=C("BORDER_COLOR"),
                 border_radius=12,
@@ -643,7 +709,7 @@ class TaskPage:
                 multiline=True,
                 min_lines=2,
                 max_lines=4,
-                bgcolor=C("BG_COLOR"),
+                bgcolor=INPUT_BG,
                 filled=True,
                 border_color=C("BORDER_COLOR"),
                 border_radius=12,
@@ -656,19 +722,18 @@ class TaskPage:
                 read_only=True,
                 value=(old_date_part or "").strip(),
                 hint_text="Due Date (Pick From Calendar)",
-                bgcolor=C("BG_COLOR"),
+                bgcolor=INPUT_BG,
                 filled=True,
                 border_color=C("BORDER_COLOR"),
                 border_radius=12,
                 color=C("TEXT_PRIMARY"),
             )
 
-            # Time field (12h)
             time_tf = ft.TextField(
                 read_only=True,
                 value=(old_time_part or "").strip(),
                 hint_text="Time (Pick From Clock)",
-                bgcolor=C("BG_COLOR"),
+                bgcolor=INPUT_BG,
                 filled=True,
                 border_color=C("BORDER_COLOR"),
                 border_radius=12,
@@ -694,7 +759,6 @@ class TaskPage:
                 self._due_date_picker.open = True
                 page.update()
 
-            # Time picker open (set 12h AM/PM)
             def open_time_picker(e):
                 def on_time_change(ev):
                     picked = self._due_time_picker.value
@@ -710,14 +774,28 @@ class TaskPage:
 
             def save_changes(e):
                 if not S.user:
-                    page.snack_bar = ft.SnackBar(content=ft.Text("No user logged in."), bgcolor=C("ERROR_COLOR"))
-                    page.snack_bar.open = True
-                    page.update()
+                    self._snack(page, "No user logged in.", C("ERROR_COLOR"))
                     return
 
                 title = (title_tf.value or "").strip()
-                desc = (desc_tf.value or "").strip()
                 cat = (category_dd.value or "").strip()
+                if not title:
+                    self._snack(page, "Task name is required. Please enter a title.", C("ERROR_COLOR"))
+                    return
+                if len(title) < 3:
+                    self._snack(page, "Task name is too short. Please enter at least 3 characters.", C("ERROR_COLOR"))
+                    return
+                if len(title) > 80:
+                    self._snack(page, "Task name is too long. Please keep it under 80 characters.", C("ERROR_COLOR"))
+                    return
+                if not cat:
+                    self._snack(page, "Category is required. Please select one.", C("ERROR_COLOR"))
+                    return
+
+                desc = (desc_tf.value or "").strip()
+                if len(desc) > 250:
+                    self._snack(page, "Description is too long. Please keep it under 250 characters.", C("ERROR_COLOR"))
+                    return
 
                 due_date_part = (due_tf.value or "").strip()
                 due_time_part = (time_tf.value or "").strip()
@@ -732,16 +810,22 @@ class TaskPage:
                     S.cal_year = picked.year
                     S.cal_month = picked.month
 
-                db.update_task(S.user["id"], task_id, title, desc, cat, due, old_status)
+                def work():
+                    db.update_task(S.user["id"], task_id, title, desc, cat, due, old_status)
 
-                dialog.open = False
-                page.update()
+                def after():
+                    dialog.open = False
+                    page.update()
+                    self._snack(page, "Task updated!", C("SUCCESS_COLOR"))
+                    self._refresh_all(page, C)
 
-                page.snack_bar = ft.SnackBar(content=ft.Text("Task updated!"), bgcolor=C("SUCCESS_COLOR"))
-                page.snack_bar.open = True
-                page.update()
-
-                self._refresh_all(page)
+                self._run_with_loading(
+                    page=page,
+                    fn=work,
+                    on_error_message="Update failed. Please try again.",
+                    error_color=C("ERROR_COLOR"),
+                    success_fn=after,
+                )
 
             def close(e):
                 dialog.open = False
@@ -761,14 +845,22 @@ class TaskPage:
                             ft.Row(
                                 [
                                     ft.Container(due_tf, expand=True),
-                                    ft.IconButton(icon=ft.Icons.CALENDAR_MONTH, icon_color=C("TEXT_PRIMARY"), on_click=open_picker),
+                                    ft.IconButton(
+                                        icon=ft.Icons.CALENDAR_MONTH,
+                                        icon_color=C("TEXT_PRIMARY"),
+                                        on_click=open_picker,
+                                    ),
                                 ],
                                 spacing=10,
                             ),
                             ft.Row(
                                 [
                                     ft.Container(time_tf, expand=True),
-                                    ft.IconButton(icon=ft.Icons.ACCESS_TIME, icon_color=C("TEXT_PRIMARY"), on_click=open_time_picker),
+                                    ft.IconButton(
+                                        icon=ft.Icons.ACCESS_TIME,
+                                        icon_color=C("TEXT_PRIMARY"),
+                                        on_click=open_time_picker,
+                                    ),
                                 ],
                                 spacing=10,
                             ),
@@ -823,13 +915,23 @@ class TaskPage:
 
             def toggle(e):
                 if not S.user:
-                    page.snack_bar = ft.SnackBar(content=ft.Text("No user logged in."), bgcolor=C("ERROR_COLOR"))
-                    page.snack_bar.open = True
-                    page.update()
+                    self._snack(page, "No user logged in.", C("ERROR_COLOR"))
                     return
-                new_status = "completed" if status == "pending" else "pending"
-                db.update_task_status(S.user["id"], task_id, new_status)
-                self._refresh_all(page)
+
+                def work():
+                    new_status = "completed" if status == "pending" else "pending"
+                    db.update_task_status(S.user["id"], task_id, new_status)
+
+                def after():
+                    self._refresh_all(page, C)
+
+                self._run_with_loading(
+                    page=page,
+                    fn=work,
+                    on_error_message="Update failed. Please try again.",
+                    error_color=C("ERROR_COLOR"),
+                    success_fn=after,
+                )
 
             title_style = ft.TextStyle(
                 size=14,
@@ -842,15 +944,12 @@ class TaskPage:
                 "Completed" if status == "completed" else "Pending",
                 bgcolor=C("SUCCESS_COLOR") if status == "completed" else C("BUTTON_COLOR"),
             )
+
             if overdue:
                 due_tag = small_tag(due_label, bgcolor=C("ERROR_COLOR"), fg="white")
             else:
-                due_tag = small_tag(
-                    due_label,
-                    bgcolor="white",
-                    fg=C("TEXT_PRIMARY"),
-                    border_color=C("BORDER_COLOR"),
-                )
+                due_tag = small_tag(due_label, bgcolor=CARD_BG, fg=C("TEXT_PRIMARY"), border_color=C("BORDER_COLOR"))
+
             cat_tag = small_tag(cat_label, bgcolor=C("TEXT_PRIMARY"))
 
             drag_handle = ft.Draggable(
@@ -859,7 +958,7 @@ class TaskPage:
                 content=ft.Icon(ft.Icons.DRAG_INDICATOR, color=C("TEXT_PRIMARY")),
                 content_feedback=ft.Container(
                     padding=8,
-                    bgcolor="#FFFFFF",
+                    bgcolor=CARD_BG,
                     border_radius=10,
                     border=ft.border.all(1, C("BORDER_COLOR")),
                     content=ft.Row(
@@ -874,7 +973,7 @@ class TaskPage:
             )
 
             card_body = ft.Container(
-                bgcolor="#FFFFFF",
+                bgcolor=CARD_BG,
                 border_radius=14,
                 border=ft.border.all(1, C("BORDER_COLOR")),
                 padding=ft.padding.symmetric(horizontal=14, vertical=12),
@@ -907,13 +1006,13 @@ class TaskPage:
                                     icon=ft.Icons.EDIT_OUTLINED,
                                     tooltip="Edit",
                                     icon_color=C("TEXT_PRIMARY"),
-                                    on_click=lambda e: show_edit_task_dialog(t),
+                                    on_click=lambda e: (None if self._is_loading else show_edit_task_dialog(t)),
                                 ),
                                 ft.IconButton(
                                     icon=ft.Icons.DELETE_OUTLINE,
                                     tooltip="Delete",
                                     icon_color=C("ERROR_COLOR"),
-                                    on_click=lambda e: confirm_delete(task_id),
+                                    on_click=lambda e: (None if self._is_loading else confirm_delete(task_id)),
                                 ),
                                 drag_handle,
                             ],
@@ -934,6 +1033,8 @@ class TaskPage:
             card_body.on_hover = on_hover
 
             def on_accept(e: ft.DragTargetEvent):
+                if self._is_loading:
+                    return
                 try:
                     src = page.get_control(e.src_id)
                     drag_id = int(getattr(src, "data", "0"))
@@ -941,11 +1042,7 @@ class TaskPage:
                     return
                 _reorder_task(drag_id, task_id)
 
-            return ft.DragTarget(
-                group="task-reorder",
-                on_accept=on_accept,
-                content=card_body,
-            )
+            return ft.DragTarget(group="task-reorder", on_accept=on_accept, content=card_body)
 
         # ---------------------------
         # Task list
@@ -968,18 +1065,19 @@ class TaskPage:
         def build_task_list_view(tasks: List[tuple]):
             if self._get_sort_mode() == "Custom":
                 self._ensure_custom_order(tasks)
-
             controls = [build_task_card(t) for t in tasks]
             return ft.ListView(expand=True, spacing=10, controls=controls)
 
-        self._build_task_list = lambda _page=page: (
-            build_empty_tasks() if not self._get_filtered_tasks() else build_task_list_view(self._get_filtered_tasks())
-        )
+        def build_task_list(_page: ft.Page):
+            tasks = self._get_filtered_tasks()
+            return build_empty_tasks() if not tasks else build_task_list_view(tasks)
+
+        self._build_task_list = build_task_list
 
         # ---------------------------
         # Analytics panel
         # ---------------------------
-        def build_analytics_panel():
+        def build_analytics_panel(_page: ft.Page):
             if not S.user:
                 return ft.Container(
                     expand=True,
@@ -1026,7 +1124,6 @@ class TaskPage:
             else:
                 self._chart_rotation = (self._chart_rotation + 18) % 360
 
-                # ✅ FIX: use per-theme chart palette (fallback list if not defined)
                 chart_palette = S.colors.get(
                     "CHART_COLORS",
                     ["#06B6D4", "#22C55E", "#F59E0B", "#EF4444", "#A855F7"],
@@ -1080,32 +1177,33 @@ class TaskPage:
                     ],
                 )
 
-            stat_card = lambda title, value, icon, color: ft.Container(
-                padding=12,
-                border_radius=14,
-                bgcolor="white",
-                border=ft.border.all(1, C("BORDER_COLOR")),
-                content=ft.Row(
-                    spacing=10,
-                    controls=[
-                        ft.Container(
-                            width=36,
-                            height=36,
-                            border_radius=10,
-                            bgcolor=color,
-                            alignment=ft.alignment.center,
-                            content=ft.Icon(icon, size=18, color="white"),
-                        ),
-                        ft.Column(
-                            spacing=2,
-                            controls=[
-                                ft.Text(title, size=11, color=C("TEXT_SECONDARY")),
-                                ft.Text(str(value), size=16, weight=ft.FontWeight.BOLD, color=C("TEXT_PRIMARY")),
-                            ],
-                        ),
-                    ],
-                ),
-            )
+            def stat_card(title, value, icon, color):
+                return ft.Container(
+                    padding=12,
+                    border_radius=14,
+                    bgcolor=CARD_BG,
+                    border=ft.border.all(1, C("BORDER_COLOR")),
+                    content=ft.Row(
+                        spacing=10,
+                        controls=[
+                            ft.Container(
+                                width=36,
+                                height=36,
+                                border_radius=10,
+                                bgcolor=color,
+                                alignment=ft.alignment.center,
+                                content=ft.Icon(icon, size=18, color="white"),
+                            ),
+                            ft.Column(
+                                spacing=2,
+                                controls=[
+                                    ft.Text(title, size=11, color=C("TEXT_SECONDARY")),
+                                    ft.Text(str(value), size=16, weight=ft.FontWeight.BOLD, color=C("TEXT_PRIMARY")),
+                                ],
+                            ),
+                        ],
+                    ),
+                )
 
             donut_card = ft.Container(
                 expand=True,
@@ -1137,7 +1235,6 @@ class TaskPage:
                                 ft.Text(f"{int(progress * 100)}%", size=12, color=C("TEXT_SECONDARY")),
                             ],
                         ),
-                        # ✅ FIX: color should be a real color, not C("#147272")
                         ft.ProgressBar(value=progress, bgcolor="#DDEFEF", color=C("BUTTON_COLOR")),
                         ft.Row(
                             spacing=10,
@@ -1178,19 +1275,21 @@ class TaskPage:
 
             return ft.Column(expand=True, spacing=14, controls=[donut_card, summary])
 
-        self._build_analytics_panel = lambda _page=page: build_analytics_panel()
+        self._build_analytics_panel = build_analytics_panel
 
         # ---------------------------
         # Filter bar
         # ---------------------------
         def set_filter(label: str):
             def f(e):
+                if self._is_loading:
+                    return
                 S.current_filter = label
-                self._refresh_all(page)
+                self._refresh_all(page, C)
 
             return f
 
-        def build_filter_bar():
+        def build_filter_bar(_page: ft.Page):
             current = getattr(S, "current_filter", "All Tasks")
             chips = [chip("All Tasks", current == "All Tasks", set_filter("All Tasks"))]
             for c in CATEGORIES:
@@ -1199,47 +1298,56 @@ class TaskPage:
             return ft.Row(
                 alignment=ft.MainAxisAlignment.SPACE_BETWEEN,
                 controls=[
-                    ft.Container(
-                        expand=True,
-                        content=ft.ListView(horizontal=True, spacing=10, controls=chips),
-                    ),
+                    ft.Container(expand=True, content=ft.ListView(horizontal=True, spacing=10, controls=chips)),
                     sort_menu_button(),
                 ],
             )
 
-        self._build_filter_bar = lambda _page=page: build_filter_bar()
+        self._build_filter_bar = build_filter_bar
 
         # ---------------------------
-        # Search TextField
+        # Search TextField (create ONCE)
         # ---------------------------
         if not self._search_tf:
             self._search_tf = ft.TextField(
                 hint_text="Search tasks...",
                 prefix_icon=ft.Icons.SEARCH,
-                bgcolor="white",
+                bgcolor=INPUT_BG,
                 filled=True,
                 border_radius=14,
                 border_color=C("BORDER_COLOR"),
                 color=C("TEXT_PRIMARY"),
                 content_padding=ft.padding.symmetric(horizontal=12, vertical=10),
-                on_change=lambda e: self._on_search_change(e, page),
+                on_change=lambda e: self._on_search_change(e, page, C),
             )
 
         # ---------------------------
-        # Hosts
+        # Hosts (create ONCE, then only update content)
         # ---------------------------
-        current_filter_label = getattr(S, "current_filter", "All Tasks")
+        if not self._filter_pill:
+            self._filter_pill = ft.Container(
+                padding=ft.padding.symmetric(horizontal=10, vertical=6),
+                border_radius=999,
+                bgcolor=C("TEXT_PRIMARY"),
+                content=ft.Text(getattr(S, "current_filter", "All Tasks"), size=11, color="white", weight=ft.FontWeight.W_600),
+            )
+        else:
+            self._filter_pill.content = ft.Text(getattr(S, "current_filter", "All Tasks"), size=11, color="white", weight=ft.FontWeight.W_600)
 
-        self._filter_pill = ft.Container(
-            padding=ft.padding.symmetric(horizontal=10, vertical=6),
-            border_radius=999,
-            bgcolor=C("TEXT_PRIMARY"),
-            content=ft.Text(current_filter_label, size=11, color="white", weight=ft.FontWeight.W_600),
-        )
+        if not self._filter_chip_row:
+            self._filter_chip_row = ft.Container(height=48, content=self._build_filter_bar(page))
+        else:
+            self._filter_chip_row.content = self._build_filter_bar(page)
 
-        self._filter_chip_row = ft.Container(height=48, content=self._build_filter_bar(page))
-        self._task_list_host = ft.Container(expand=True, padding=ft.padding.only(top=6), content=self._build_task_list(page))
-        self._analytics_host = ft.Container(expand=True, content=self._build_analytics_panel(page))
+        if not self._task_list_host:
+            self._task_list_host = ft.Container(expand=True, padding=ft.padding.only(top=6), content=self._build_task_list(page))
+        else:
+            self._task_list_host.content = self._build_task_list(page)
+
+        if not self._analytics_host:
+            self._analytics_host = ft.Container(expand=True, content=self._build_analytics_panel(page))
+        else:
+            self._analytics_host.content = self._build_analytics_panel(page)
 
         # ---------------------------
         # Panels
@@ -1288,7 +1396,7 @@ class TaskPage:
                                 icon=ft.Icons.ADD,
                                 bgcolor=C("BUTTON_COLOR"),
                                 foreground_color=ft.Colors.WHITE,
-                                on_click=lambda e: show_add_task_dialog(),
+                                on_click=lambda e: (None if self._is_loading else show_add_task_dialog()),
                             )
                         ],
                     ),
@@ -1322,4 +1430,11 @@ class TaskPage:
             ),
         )
 
-        return board
+        # Return with loader overlay on top
+        return ft.Stack(
+            expand=True,
+            controls=[
+                board,
+                self._loading_overlay,
+            ],
+        )

@@ -1,5 +1,5 @@
 import flet as ft
-from datetime import date, datetime, timedelta
+from datetime import date, datetime
 from typing import Optional, Tuple
 from zoneinfo import ZoneInfo
 import json
@@ -13,6 +13,10 @@ class CalendarPage:
         # Cache holidays per year so we don't call the API every refresh
         self._holiday_cache: dict[int, dict[str, str]] = {}
 
+        # Hosts to update only parts of the UI (prevents white flash)
+        self._left_host: Optional[ft.Container] = None
+        self._right_host: Optional[ft.Container] = None
+
     def view(self, page: ft.Page):
         S = self.S
         db = S.db
@@ -24,7 +28,10 @@ class CalendarPage:
             return S.colors.get(k, "#000000")
 
         # Local date (Asia/Manila)
-        TODAY = datetime.now(ZoneInfo("Asia/Manila")).date()
+        try:
+            TODAY = datetime.now(ZoneInfo("Asia/Manila")).date()
+        except Exception:
+            TODAY = datetime.now().date()
 
         # -----------------------------
         # Date parsing + formatting
@@ -45,17 +52,41 @@ class CalendarPage:
                 return None
 
         def safe_parse_time(s: str) -> Optional[Tuple[int, int]]:
+            """
+            Your tasks may be stored as:
+              - "YYYY-MM-DD"
+              - "YYYY-MM-DD HH:MM"
+              - "YYYY-MM-DD h:MM AM/PM"
+            This supports both 24h and 12h times.
+            """
             try:
                 s = (s or "").strip()
                 if not s:
                     return None
+
                 parts = s.split()
                 if len(parts) < 2:
                     return None
-                hh, mm = parts[1].split(":")
-                return int(hh), int(mm)
+
+                # time part could be "13:30" or "1:30"
+                time_part = parts[1]
+                ampm = parts[2].upper() if len(parts) >= 3 else ""
+
+                hh, mm = time_part.split(":")
+                hour = int(hh)
+                minute = int(mm)
+
+                if ampm in ("AM", "PM"):
+                    if hour == 12:
+                        hour = 0
+                    if ampm == "PM":
+                        hour += 12
+
+                if 0 <= hour <= 23 and 0 <= minute <= 59:
+                    return hour, minute
             except Exception:
-                return None
+                pass
+            return None
 
         def due_date_only(due_str: str) -> str:
             d = safe_parse_date(due_str)
@@ -95,7 +126,6 @@ class CalendarPage:
         def ph_holidays_for_year(y: int) -> dict[str, str]:
             # Use cache first
             if y in self._holiday_cache:
-                # Return a copy so later changes don't mess with the cache
                 return dict(self._holiday_cache[y])
 
             url = f"https://date.nager.at/api/v3/PublicHolidays/{y}/PH"
@@ -113,18 +143,17 @@ class CalendarPage:
 
                 for it in items:
                     d = (it.get("date") or "").strip()
-                    # Use "name" (English), not "localName"
-                    name = (it.get("name") or "").strip()
+                    name = (it.get("name") or "").strip()  # English name
                     if d and name:
                         hol[d] = name
 
             except (urllib.error.URLError, urllib.error.HTTPError, TimeoutError, ValueError):
-                # If API fails, just show no holidays (calendar still works)
                 hol = {}
 
             self._holiday_cache[y] = hol
             return dict(hol)
 
+        # Keep holidays dict local so closures can use it
         holidays = ph_holidays_for_year(S.cal_year)
 
         def holiday_name(d: date) -> str:
@@ -191,12 +220,21 @@ class CalendarPage:
             return f"{abs(diff)} day(s) ago"
 
         # -----------------------------
-        # Refresh calendar (keep UI the same)
+        # Refresh UI only (no S.update -> no white flash)
         # -----------------------------
-        def refresh():
+        def refresh_ui():
+            # refresh holidays dict for current year
             holidays.clear()
             holidays.update(ph_holidays_for_year(S.cal_year))
-            S.update()
+
+            # update only left/right content to avoid full redraw
+            if self._left_host is not None and getattr(self._left_host, "page", None) is not None:
+                self._left_host.content = build_left_panel()
+                self._left_host.update()
+
+            if self._right_host is not None and getattr(self._right_host, "page", None) is not None:
+                self._right_host.content = build_right_panel()
+                self._right_host.update()
 
         # -----------------------------
         # Month navigation
@@ -207,7 +245,7 @@ class CalendarPage:
                 S.cal_year -= 1
             else:
                 S.cal_month -= 1
-            refresh()
+            refresh_ui()
 
         def next_month(e):
             if S.cal_month == 12:
@@ -215,7 +253,7 @@ class CalendarPage:
                 S.cal_year += 1
             else:
                 S.cal_month += 1
-            refresh()
+            refresh_ui()
 
         # -----------------------------
         # Small UI helpers
@@ -267,7 +305,7 @@ class CalendarPage:
             S.selected_date = d
             S.cal_year = d.year
             S.cal_month = d.month
-            refresh()
+            refresh_ui()
 
         # -----------------------------
         # Calendar grid (no layout changes)
@@ -385,7 +423,6 @@ class CalendarPage:
         def build_left_panel():
             d = S.selected_date
             hol = holiday_name(d)
-
             items = tasks_for_date(d)
 
             tasks_today = len(tasks_for_date(TODAY))
@@ -517,7 +554,7 @@ class CalendarPage:
             )
 
         # -----------------------------
-        # Right panel (UI unchanged)
+        # Right panel
         # -----------------------------
         def build_right_panel():
             y, m = S.cal_year, S.cal_month
@@ -537,7 +574,11 @@ class CalendarPage:
                             controls=[
                                 ft.Text(month_abbr(m), size=13, weight=ft.FontWeight.BOLD, color="white"),
                                 ft.Text(str(y), size=13, weight=ft.FontWeight.BOLD, color="white"),
-                                pill(f"{tasks_month} due", bgcolor=ft.Colors.with_opacity(0.20, ft.Colors.WHITE), fg="white"),
+                                pill(
+                                    f"{tasks_month} due",
+                                    bgcolor=ft.Colors.with_opacity(0.20, ft.Colors.WHITE),
+                                    fg="white",
+                                ),
                             ],
                         ),
                         ft.IconButton(icon=ft.Icons.CHEVRON_RIGHT, icon_color="white", on_click=next_month),
@@ -556,15 +597,35 @@ class CalendarPage:
 
             legend = ft.Row(
                 [
-                    ft.Row([ft.Container(width=10, height=10, border_radius=99, bgcolor=C("ERROR_COLOR")),
-                            ft.Text("Holiday", size=11, color=C("TEXT_SECONDARY"))], spacing=8),
-                    ft.Row([ft.Container(width=10, height=10, border_radius=99, bgcolor=C("SUCCESS_COLOR")),
-                            ft.Text("Has Tasks", size=11, color=C("TEXT_SECONDARY"))], spacing=8),
-                    ft.Row([ft.Container(width=10, height=10, border_radius=99, bgcolor=C("BUTTON_COLOR")),
-                            ft.Text("Selected", size=11, color=C("TEXT_SECONDARY"))], spacing=8),
-                    ft.Row([ft.Container(width=10, height=10, border_radius=99, bgcolor="white",
+                    ft.Row(
+                        [
+                            ft.Container(width=10, height=10, border_radius=99, bgcolor=C("ERROR_COLOR")),
+                            ft.Text("Holiday", size=11, color=C("TEXT_SECONDARY")),
+                        ],
+                        spacing=8,
+                    ),
+                    ft.Row(
+                        [
+                            ft.Container(width=10, height=10, border_radius=99, bgcolor=C("SUCCESS_COLOR")),
+                            ft.Text("Has Tasks", size=11, color=C("TEXT_SECONDARY")),
+                        ],
+                        spacing=8,
+                    ),
+                    ft.Row(
+                        [
+                            ft.Container(width=10, height=10, border_radius=99, bgcolor=C("BUTTON_COLOR")),
+                            ft.Text("Selected", size=11, color=C("TEXT_SECONDARY")),
+                        ],
+                        spacing=8,
+                    ),
+                    ft.Row(
+                        [
+                            ft.Container(width=10, height=10, border_radius=99, bgcolor="white",
                                          border=ft.border.all(2, C("BUTTON_COLOR"))),
-                            ft.Text("Today", size=11, color=C("TEXT_SECONDARY"))], spacing=8),
+                            ft.Text("Today", size=11, color=C("TEXT_SECONDARY")),
+                        ],
+                        spacing=8,
+                    ),
                 ],
                 spacing=18,
                 alignment=ft.MainAxisAlignment.CENTER,
@@ -595,8 +656,11 @@ class CalendarPage:
             )
 
         # -----------------------------
-        # Page layout
+        # Page layout (IMPORTANT: create hosts here)
         # -----------------------------
+        self._left_host = ft.Container(content=build_left_panel(), expand=5)
+        self._right_host = ft.Container(content=build_right_panel(), expand=6)
+
         board = ft.Container(
             expand=True,
             border_radius=22,
@@ -608,9 +672,9 @@ class CalendarPage:
                 alignment=ft.MainAxisAlignment.CENTER,
                 vertical_alignment=ft.CrossAxisAlignment.STRETCH,
                 controls=[
-                    ft.Container(content=build_left_panel(), expand=5),
+                    self._left_host,
                     ft.Container(width=22),
-                    ft.Container(content=build_right_panel(), expand=6),
+                    self._right_host,
                 ],
             ),
         )
