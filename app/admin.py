@@ -11,6 +11,28 @@ def get_admin_page(
     FORM_BG,
     on_logout=None,
 ):
+    # -----------------------------
+    # ✅ Pink Admin Theme (override incoming colors)
+    # -----------------------------
+    PINK_BG = "#FFF1F6"
+    PINK_SOFT = "#FFE4EF"
+    PINK_CARD = "#FFD1E3"
+    PINK_STRONG = "#FF4D8D"
+    PINK_DARK = "#8A2E54"
+    TEXT_DARK = "#3A2A33"
+    TEXT_MUTED = "#6C5A65"
+    WHITE = "white"
+
+    # override passed palette so the whole admin page matches front page
+    BG_COLOR = PINK_BG
+    FORM_BG = "#FFF7FA"
+    BUTTON_COLOR = PINK_STRONG
+    PRIMARY_TEXT = PINK_DARK
+    SECONDARY_TEXT = TEXT_MUTED
+
+    # -----------------------------
+    # Data
+    # -----------------------------
     logs = db.get_logs()
 
     try:
@@ -37,8 +59,8 @@ def get_admin_page(
     # -----------------------------
     # Helpers
     # -----------------------------
-    def show_message(text: str, color="red"):
-        snack = ft.SnackBar(content=ft.Text(text), bgcolor=color, duration=2000)
+    def show_message(text: str, color=PINK_STRONG):
+        snack = ft.SnackBar(content=ft.Text(text, color="white"), bgcolor=color, duration=2200)
         try:
             page.overlay.append(snack)
             snack.open = True
@@ -80,10 +102,10 @@ def get_admin_page(
                 db.add_log("BAN", f"Admin banned user_id={int(user_id)}", user_id=int(user_id))
             except Exception:
                 pass
-            show_message("User banned.", "green")
+            show_message("User banned.", PINK_STRONG)
             refresh_admin()
         except Exception as ex:
-            show_message(f"Ban failed: {ex}", "red")
+            show_message(f"Ban failed: {ex}", "#E11D48")
 
     def unban_user(user_id: int):
         try:
@@ -92,14 +114,14 @@ def get_admin_page(
                 db.add_log("UNBAN", f"Admin unbanned user_id={int(user_id)}", user_id=int(user_id))
             except Exception:
                 pass
-            show_message("Ban lifted.", "green")
+            show_message("Ban lifted.", "#16A34A")
             refresh_admin()
         except Exception as ex:
-            show_message(f"Unban failed: {ex}", "red")
+            show_message(f"Unban failed: {ex}", "#E11D48")
 
     def confirm_delete(user_id: int):
         if user_id is None:
-            show_message("Delete failed: invalid user id.", "red")
+            show_message("Delete failed: invalid user id.", "#E11D48")
             return
 
         def do_delete(e):
@@ -116,10 +138,10 @@ def get_admin_page(
                 dlg.open = False
                 page.update()
 
-                show_message("User deleted.", "green")
+                show_message("User deleted.", "#E11D48")
                 refresh_admin()
             except Exception as ex:
-                show_message(f"Delete failed: {ex}", "red")
+                show_message(f"Delete failed: {ex}", "#E11D48")
 
         def close(e):
             dlg.open = False
@@ -127,12 +149,12 @@ def get_admin_page(
 
         dlg = ft.AlertDialog(
             modal=True,
-            bgcolor=FORM_BG,
+            bgcolor=WHITE,
             title=ft.Text("Delete User?", color=PRIMARY_TEXT, weight=ft.FontWeight.BOLD),
             content=ft.Text("This will permanently remove the account and data.", color=SECONDARY_TEXT),
             actions=[
                 ft.TextButton("Cancel", on_click=close),
-                ft.ElevatedButton("Delete", on_click=do_delete, bgcolor="red", color="white"),
+                ft.ElevatedButton("Delete", on_click=do_delete, bgcolor="#E11D48", color="white"),
             ],
             actions_alignment=ft.MainAxisAlignment.END,
             shape=ft.RoundedRectangleBorder(radius=14),
@@ -145,22 +167,53 @@ def get_admin_page(
         page.update()
 
     # -----------------------------
+    # ✅ UI helpers (pink + nicer spacing)
+    # -----------------------------
+    def section_title(text: str, icon):
+        return ft.Row(
+            spacing=10,
+            controls=[
+                ft.Container(
+                    width=34,
+                    height=34,
+                    border_radius=12,
+                    bgcolor=PINK_SOFT,
+                    alignment=ft.alignment.center,
+                    content=ft.Icon(icon, color=PINK_STRONG, size=18),
+                ),
+                ft.Text(text, size=16, weight=ft.FontWeight.BOLD, color=PRIMARY_TEXT),
+            ],
+        )
+
+    def soft_card(content, padding=16):
+        return ft.Container(
+            border_radius=18,
+            bgcolor=WHITE,
+            border=ft.border.all(1, "#FFD6E6"),
+            padding=padding,
+            shadow=ft.BoxShadow(blur_radius=14, color="#00000010", offset=ft.Offset(0, 8)),
+            content=content,
+            animate=ft.Animation(180, ft.AnimationCurve.EASE_OUT),
+        )
+
+    # -----------------------------
     # UI State (search + tabs)
     # -----------------------------
     search_tf = ft.TextField(
         hint_text="Search users by name or email...",
         prefix_icon=ft.Icons.SEARCH,
-        bgcolor="white",
+        bgcolor=WHITE,
         filled=True,
         border_radius=14,
-        border_color=ft.Colors.with_opacity(0.18, PRIMARY_TEXT),
-        color=PRIMARY_TEXT,
+        border_color="#FFD6E6",
+        focused_border_color=PINK_STRONG,
+        color=TEXT_DARK,
         content_padding=ft.padding.symmetric(horizontal=12, vertical=10),
     )
 
     tab = ft.Tabs(
         selected_index=0,
-        indicator_color=BUTTON_COLOR,
+        indicator_color=PINK_STRONG,
         label_color=PRIMARY_TEXT,
         unselected_label_color=SECONDARY_TEXT,
         tabs=[
@@ -175,7 +228,6 @@ def get_admin_page(
     def build_user_cards():
         q = (search_tf.value or "").strip().lower()
 
-        # Filter users using the search text
         to_render = []
         for u in filtered_users:
             if isinstance(u, dict):
@@ -205,107 +257,122 @@ def get_admin_page(
                 role = u[3] if len(u) > 3 else ""
                 is_banned = bool(u[4]) if len(u) > 4 else False
 
-            badge = None
+            badge = ft.Container()
             if is_banned:
                 badge = ft.Container(
                     padding=ft.padding.symmetric(horizontal=10, vertical=6),
                     border_radius=999,
-                    bgcolor=ft.Colors.with_opacity(0.12, ft.Colors.RED),
-                    border=ft.border.all(1, ft.Colors.with_opacity(0.35, ft.Colors.RED)),
-                    content=ft.Text("BANNED", size=11, color=ft.Colors.RED, weight=ft.FontWeight.BOLD),
+                    bgcolor="#FFE4E6",
+                    border=ft.border.all(1, "#FDA4AF"),
+                    content=ft.Text("BANNED", size=11, color="#E11D48", weight=ft.FontWeight.BOLD),
                 )
 
             action_btn = (
                 ft.IconButton(
                     icon=ft.Icons.LOCK_OPEN,
                     tooltip="Lift ban",
-                    icon_color=PRIMARY_TEXT,
+                    icon_color="#16A34A",
                     on_click=(lambda e, _uid=uid: unban_user(_uid)),
                 )
                 if is_banned
                 else ft.IconButton(
                     icon=ft.Icons.BLOCK,
                     tooltip="Ban user",
-                    icon_color=ft.Colors.RED,
+                    icon_color="#E11D48",
                     on_click=(lambda e, _uid=uid: ban_user(_uid)),
                 )
             )
 
-            cards.append(
-                ft.Container(
-                    border_radius=18,
-                    bgcolor="white",
-                    border=ft.border.all(1, ft.Colors.with_opacity(0.18, PRIMARY_TEXT)),
-                    padding=16,
-                    content=ft.Row(
-                        alignment=ft.MainAxisAlignment.SPACE_BETWEEN,
-                        vertical_alignment=ft.CrossAxisAlignment.CENTER,
-                        controls=[
-                            ft.Row(
-                                expand=True,
-                                spacing=14,
-                                controls=[
-                                    ft.CircleAvatar(
-                                        radius=22,
-                                        bgcolor=BUTTON_COLOR,
-                                        content=ft.Text((name[:1] or "U").upper(), color="white", weight=ft.FontWeight.BOLD),
-                                    ),
-                                    ft.Column(
-                                        expand=True,
-                                        spacing=4,
-                                        controls=[
-                                            ft.Row(
-                                                spacing=10,
-                                                controls=[
-                                                    ft.Text(name or "Unnamed", size=14, weight=ft.FontWeight.BOLD, color=PRIMARY_TEXT),
-                                                    badge if badge else ft.Container(),
-                                                ],
-                                            ),
-                                            ft.Text(email or "No email", size=12, color=SECONDARY_TEXT),
-                                            ft.Row(
-                                                spacing=10,
-                                                controls=[
-                                                    ft.Text(f"User ID: {display_id}", size=11, color=SECONDARY_TEXT),
-                                                    ft.Text(f"Role: {role or 'user'}", size=11, color=SECONDARY_TEXT),
-                                                ],
-                                            ),
-                                        ],
-                                    ),
-                                ],
-                            ),
-                            ft.Row(
-                                spacing=6,
-                                controls=[
-                                    action_btn,
-                                    ft.IconButton(
-                                        icon=ft.Icons.DELETE_OUTLINE,
-                                        tooltip="Delete user",
-                                        icon_color=ft.Colors.RED,
-                                        on_click=(lambda e, _uid=uid: confirm_delete(_uid)),
-                                    ),
-                                ],
-                            ),
-                        ],
-                    ),
-                )
+            avatar_bg = PINK_STRONG if not is_banned else "#F472B6"
+
+            card = soft_card(
+                ft.Row(
+                    alignment=ft.MainAxisAlignment.SPACE_BETWEEN,
+                    vertical_alignment=ft.CrossAxisAlignment.CENTER,
+                    controls=[
+                        ft.Row(
+                            expand=True,
+                            spacing=14,
+                            controls=[
+                                ft.CircleAvatar(
+                                    radius=22,
+                                    bgcolor=avatar_bg,
+                                    content=ft.Text((name[:1] or "U").upper(), color="white", weight=ft.FontWeight.BOLD),
+                                ),
+                                ft.Column(
+                                    expand=True,
+                                    spacing=4,
+                                    controls=[
+                                        ft.Row(
+                                            spacing=10,
+                                            controls=[
+                                                ft.Text(name or "Unnamed", size=14, weight=ft.FontWeight.BOLD, color=TEXT_DARK),
+                                                badge,
+                                            ],
+                                        ),
+                                        ft.Text(email or "No email", size=12, color=TEXT_MUTED),
+                                        ft.Row(
+                                            spacing=10,
+                                            controls=[
+                                                ft.Container(
+                                                    padding=ft.padding.symmetric(horizontal=10, vertical=6),
+                                                    border_radius=999,
+                                                    bgcolor=PINK_SOFT,
+                                                    border=ft.border.all(1, "#FFD6E6"),
+                                                    content=ft.Text(f"ID: {display_id}", size=11, color=PINK_DARK, weight=ft.FontWeight.W_600),
+                                                ),
+                                                ft.Container(
+                                                    padding=ft.padding.symmetric(horizontal=10, vertical=6),
+                                                    border_radius=999,
+                                                    bgcolor="#FFF7FA",
+                                                    border=ft.border.all(1, "#FFD6E6"),
+                                                    content=ft.Text(f"Role: {role or 'user'}", size=11, color=PINK_DARK, weight=ft.FontWeight.W_600),
+                                                ),
+                                            ],
+                                        ),
+                                    ],
+                                ),
+                            ],
+                        ),
+                        ft.Row(
+                            spacing=6,
+                            controls=[
+                                action_btn,
+                                ft.IconButton(
+                                    icon=ft.Icons.DELETE_OUTLINE,
+                                    tooltip="Delete user",
+                                    icon_color="#E11D48",
+                                    on_click=(lambda e, _uid=uid: confirm_delete(_uid)),
+                                ),
+                            ],
+                        ),
+                    ],
+                ),
+                padding=16,
             )
+
+            def _hover(e, c=card):
+                if e.data == "true":
+                    c.scale = 1.01
+                else:
+                    c.scale = 1.0
+                page.update()
+
+            card.on_hover = _hover
+            cards.append(card)
 
         if not cards:
             return [
-                ft.Container(
-                    border_radius=18,
-                    bgcolor="white",
-                    border=ft.border.all(1, ft.Colors.with_opacity(0.18, PRIMARY_TEXT)),
-                    padding=18,
-                    alignment=ft.alignment.center,
-                    content=ft.Column(
+                soft_card(
+                    ft.Column(
                         horizontal_alignment=ft.CrossAxisAlignment.CENTER,
                         spacing=8,
                         controls=[
-                            ft.Icon(ft.Icons.PEOPLE_OUTLINED, size=44, color=SECONDARY_TEXT),
-                            ft.Text("No users found.", size=13, color=SECONDARY_TEXT),
+                            ft.Icon(ft.Icons.PEOPLE_OUTLINED, size=44, color=TEXT_MUTED),
+                            ft.Text("No users found.", size=13, color=TEXT_MUTED),
                         ],
                     ),
+                    padding=20,
                 )
             ]
         return cards
@@ -317,21 +384,18 @@ def get_admin_page(
         cards = []
         for log in logs:
             action = (log.get("action") or "").strip().upper()
-            accent = BUTTON_COLOR
+
+            accent = PINK_STRONG
             if "DELETE" in action:
-                accent = ft.Colors.RED
+                accent = "#E11D48"
             elif "BAN" in action:
-                accent = ft.Colors.RED
+                accent = "#E11D48"
             elif "UNBAN" in action:
-                accent = ft.Colors.GREEN
+                accent = "#16A34A"
 
             cards.append(
-                ft.Container(
-                    border_radius=18,
-                    bgcolor="white",
-                    border=ft.border.all(1, ft.Colors.with_opacity(0.18, PRIMARY_TEXT)),
-                    padding=16,
-                    content=ft.Row(
+                soft_card(
+                    ft.Row(
                         spacing=14,
                         vertical_alignment=ft.CrossAxisAlignment.START,
                         controls=[
@@ -349,36 +413,33 @@ def get_admin_page(
                                     ft.Row(
                                         alignment=ft.MainAxisAlignment.SPACE_BETWEEN,
                                         controls=[
-                                            ft.Text(action or "ACTION", size=13, weight=ft.FontWeight.BOLD, color=PRIMARY_TEXT),
-                                            ft.Text(str(log.get("created_at") or ""), size=11, color=SECONDARY_TEXT),
+                                            ft.Text(action or "ACTION", size=13, weight=ft.FontWeight.BOLD, color=TEXT_DARK),
+                                            ft.Text(str(log.get("created_at") or ""), size=11, color=TEXT_MUTED),
                                         ],
                                     ),
-                                    ft.Text(f"User ID: {log.get('user_id')}", size=12, color=SECONDARY_TEXT),
-                                    ft.Text(f"Email: {log.get('email')}", size=12, color=SECONDARY_TEXT),
-                                    ft.Text(f"Details: {log.get('details')}", size=12, color=SECONDARY_TEXT),
+                                    ft.Text(f"User ID: {log.get('user_id')}", size=12, color=TEXT_MUTED),
+                                    ft.Text(f"Email: {log.get('email')}", size=12, color=TEXT_MUTED),
+                                    ft.Text(f"Details: {log.get('details')}", size=12, color=TEXT_MUTED),
                                 ],
                             ),
                         ],
                     ),
+                    padding=16,
                 )
             )
 
         if not cards:
             return [
-                ft.Container(
-                    border_radius=18,
-                    bgcolor="white",
-                    border=ft.border.all(1, ft.Colors.with_opacity(0.18, PRIMARY_TEXT)),
-                    padding=18,
-                    alignment=ft.alignment.center,
-                    content=ft.Column(
+                soft_card(
+                    ft.Column(
                         horizontal_alignment=ft.CrossAxisAlignment.CENTER,
                         spacing=8,
                         controls=[
-                            ft.Icon(ft.Icons.RECEIPT_LONG_OUTLINED, size=44, color=SECONDARY_TEXT),
-                            ft.Text("No logs found.", size=13, color=SECONDARY_TEXT),
+                            ft.Icon(ft.Icons.RECEIPT_LONG_OUTLINED, size=44, color=TEXT_MUTED),
+                            ft.Text("No logs found.", size=13, color=TEXT_MUTED),
                         ],
                     ),
+                    padding=20,
                 )
             ]
         return cards
@@ -389,13 +450,12 @@ def get_admin_page(
     content_host = ft.Container(expand=True)
 
     def render():
-        # Show Users tab or Logs tab
         if tab.selected_index == 0:
             content_host.content = ft.Column(
                 expand=True,
                 spacing=12,
                 controls=[
-                    ft.Text("Users", size=16, weight=ft.FontWeight.BOLD, color=PRIMARY_TEXT),
+                    section_title("Users", ft.Icons.PEOPLE_OUTLINED),
                     ft.Container(expand=True, content=ft.ListView(expand=True, spacing=10, controls=build_user_cards())),
                 ],
             )
@@ -404,7 +464,7 @@ def get_admin_page(
                 expand=True,
                 spacing=12,
                 controls=[
-                    ft.Text("Log History", size=16, weight=ft.FontWeight.BOLD, color=PRIMARY_TEXT),
+                    section_title("Log History", ft.Icons.RECEIPT_LONG_OUTLINED),
                     ft.Container(expand=True, content=ft.ListView(expand=True, spacing=10, controls=build_log_cards())),
                 ],
             )
@@ -423,12 +483,8 @@ def get_admin_page(
     # -----------------------------
     # Header (top section)
     # -----------------------------
-    header = ft.Container(
-        border_radius=22,
-        bgcolor="white",
-        border=ft.border.all(1, ft.Colors.with_opacity(0.18, PRIMARY_TEXT)),
-        padding=18,
-        content=ft.Row(
+    header = soft_card(
+        ft.Row(
             alignment=ft.MainAxisAlignment.SPACE_BETWEEN,
             vertical_alignment=ft.CrossAxisAlignment.CENTER,
             controls=[
@@ -439,15 +495,15 @@ def get_admin_page(
                             width=44,
                             height=44,
                             border_radius=14,
-                            bgcolor=BUTTON_COLOR,
+                            bgcolor=PINK_STRONG,
                             alignment=ft.alignment.center,
                             content=ft.Icon(ft.Icons.ADMIN_PANEL_SETTINGS, color="white"),
                         ),
                         ft.Column(
                             spacing=2,
                             controls=[
-                                ft.Text("Admin Panel", size=20, weight=ft.FontWeight.BOLD, color=PRIMARY_TEXT),
-                                ft.Text("Manage users and review system logs.", size=12, color=SECONDARY_TEXT),
+                                ft.Text("Admin Panel", size=20, weight=ft.FontWeight.BOLD, color=TEXT_DARK),
+                                ft.Text("Manage users and review system logs.", size=12, color=TEXT_MUTED),
                             ],
                         ),
                     ],
@@ -458,31 +514,32 @@ def get_admin_page(
                         ft.IconButton(
                             icon=ft.Icons.REFRESH,
                             tooltip="Refresh",
-                            icon_color=PRIMARY_TEXT,
+                            icon_color=PINK_DARK,
                             on_click=lambda e: refresh_admin(),
                         ),
                         ft.IconButton(
                             icon=ft.Icons.LOGOUT,
                             tooltip="Logout",
-                            icon_color=PRIMARY_TEXT,
+                            icon_color=PINK_DARK,
                             on_click=do_logout,
                         ),
                     ],
                 ),
             ],
         ),
+        padding=18,
     )
 
-    # First render
+    # first render
     render()
 
     # -----------------------------
     # Page layout
     # -----------------------------
     return ft.Container(
-        padding=18,
-        bgcolor=BG_COLOR,
         expand=True,
+        bgcolor=BG_COLOR,
+        padding=18,
         content=ft.Column(
             expand=True,
             spacing=14,
@@ -499,7 +556,7 @@ def get_admin_page(
                     expand=True,
                     border_radius=22,
                     bgcolor=FORM_BG,
-                    border=ft.border.all(1, ft.Colors.with_opacity(0.18, PRIMARY_TEXT)),
+                    border=ft.border.all(1, "#FFD6E6"),
                     padding=18,
                     content=content_host,
                 ),

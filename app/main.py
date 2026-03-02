@@ -1,5 +1,6 @@
 import flet as ft
 from passlib.hash import bcrypt
+import asyncio  # ✅ ADDED
 
 from app.admin import get_admin_page
 from app.vault import get_secret
@@ -21,6 +22,12 @@ def main(page: ft.Page):
     page.scroll = None
 
     # -----------------------------
+    # ✅ LOADING TIME SETTINGS (EDIT THESE)
+    # -----------------------------
+    APP_LOADING_SECONDS = 2.0     # loader when app opens
+    LOGIN_LOADING_SECONDS = 2.0   # loader after login click
+
+    # -----------------------------
     # Database startup
     # -----------------------------
     db.init_db()
@@ -35,7 +42,7 @@ def main(page: ft.Page):
     ADMIN_EMAIL = get_secret("ADMIN_EMAIL", "admin@taskwise.com")
 
     # -----------------------------
-    # Colors
+    # Colors (existing)
     # -----------------------------
     BG_COLOR = "#F8F6F4"
     FORM_BG = "#E3F4F4"
@@ -44,6 +51,57 @@ def main(page: ft.Page):
     PRIMARY_TEXT = "#4A707A"
     SECONDARY_TEXT = "#6B8F97"
     SUCCESS_GREEN = "#4CAF50"
+
+    # -----------------------------
+    # ✅ PINK FRONT PAGE THEME (new)
+    # -----------------------------
+    PINK_BG = "#FFF1F6"
+    PINK_SOFT = "#FFE4EF"
+    PINK_CARD = "#FFD1E3"
+    PINK_STRONG = "#FF4D8D"
+    PINK_DARK = "#8A2E54"
+    TEXT_DARK = "#3A2A33"
+    TEXT_MUTED = "#6C5A65"
+
+    # -----------------------------
+    # ✅ GLOBAL LOADER OVERLAY (PERSISTS ACROSS VIEWS)
+    # -----------------------------
+    loader_overlay = ft.Container(
+        visible=False,
+        expand=True,
+        bgcolor="#00000055",
+        alignment=ft.alignment.center,
+        content=ft.Container(
+            padding=20,
+            border_radius=16,
+            bgcolor="white",
+            content=ft.Column(
+                tight=True,
+                horizontal_alignment=ft.CrossAxisAlignment.CENTER,
+                spacing=10,
+                controls=[
+                    ft.ProgressRing(),
+                    ft.Text("Loading, please wait...", size=12, color=PRIMARY_TEXT),
+                ],
+            ),
+        ),
+    )
+    _is_loading = False
+
+    def show_loader():
+        nonlocal _is_loading
+        _is_loading = True
+        loader_overlay.visible = True
+        page.update()
+
+    def hide_loader():
+        nonlocal _is_loading
+        _is_loading = False
+        loader_overlay.visible = False
+        page.update()
+
+    if loader_overlay not in page.overlay:
+        page.overlay.append(loader_overlay)
 
     # -----------------------------
     # Quick message popup (with suggestions)
@@ -77,85 +135,86 @@ def main(page: ft.Page):
         )
 
     # -----------------------------
-    # Small UI helpers
+    # ✅ Small UI helpers (UPDATED TO PINK THEME)
     # -----------------------------
     def pill(text, icon):
         return ft.Container(
             padding=ft.padding.symmetric(horizontal=12, vertical=8),
             bgcolor="white",
             border_radius=999,
-            border=ft.border.all(1, "#D6E7E7"),
+            border=ft.border.all(1, PINK_CARD),
             content=ft.Row(
                 tight=True,
                 spacing=6,
                 controls=[
-                    ft.Icon(icon, size=16, color=PRIMARY_TEXT),
-                    ft.Text(text, size=12, color=PRIMARY_TEXT, weight=ft.FontWeight.W_600),
+                    ft.Icon(icon, size=16, color=PINK_STRONG),
+                    ft.Text(text, size=12, color=TEXT_DARK, weight=ft.FontWeight.W_600),
                 ],
             ),
         )
 
     def hover_button(text, filled=True, on_click=None):
         btn = ft.Container(
-            content=ft.Text(text, size=15, weight=ft.FontWeight.BOLD, color=PRIMARY_TEXT),
-            bgcolor=BUTTON_COLOR if filled else "white",
-            border=None if filled else ft.border.all(2, PRIMARY_TEXT),
-            padding=ft.padding.symmetric(horizontal=30, vertical=14),
+            content=ft.Text(
+                text,
+                size=15,
+                weight=ft.FontWeight.BOLD,
+                color=("white" if filled else PINK_DARK),
+            ),
+            bgcolor=(PINK_STRONG if filled else "white"),
+            border=None if filled else ft.border.all(2, PINK_STRONG),
+            padding=ft.padding.symmetric(horizontal=28, vertical=14),
             border_radius=16,
             ink=True,
             on_click=on_click,
-            shadow=ft.BoxShadow(blur_radius=12, color="#00000010", offset=ft.Offset(0, 6)),
+            animate=ft.Animation(200, ft.AnimationCurve.EASE_OUT),
+            shadow=ft.BoxShadow(blur_radius=14, color="#00000012", offset=ft.Offset(0, 7)),
         )
 
         def on_hover(e: ft.HoverEvent):
             if e.data == "true":
-                btn.shadow = ft.BoxShadow(blur_radius=20, color="#00000018", offset=ft.Offset(0, 10))
+                btn.scale = 1.02
+                btn.shadow = ft.BoxShadow(blur_radius=22, color="#0000001A", offset=ft.Offset(0, 11))
                 if filled:
-                    btn.bgcolor = "#C7E3E3"
+                    btn.bgcolor = "#FF2F78"
             else:
-                btn.shadow = ft.BoxShadow(blur_radius=12, color="#00000010", offset=ft.Offset(0, 6))
-                btn.bgcolor = BUTTON_COLOR if filled else "white"
+                btn.scale = 1.0
+                btn.shadow = ft.BoxShadow(blur_radius=14, color="#00000012", offset=ft.Offset(0, 7))
+                btn.bgcolor = (PINK_STRONG if filled else "white")
             page.update()
 
         btn.on_hover = on_hover
         return btn
 
+    # ✅ UPDATED: feature card is pink + modern + hover animation
     def feature_card(title, subtitle, icon):
         card = ft.Container(
             expand=True,
-            bgcolor=CARD_BG,
-            padding=22,
+            padding=20,
             border_radius=18,
-            shadow=ft.BoxShadow(
-                blur_radius=12,
-                spread_radius=1,
-                color="#00000010",
-                offset=ft.Offset(0, 6),
-            ),
-            content=ft.Column(
-                spacing=12,
-                horizontal_alignment=ft.CrossAxisAlignment.CENTER,
+            bgcolor="white",
+            border=ft.border.all(1, PINK_CARD),
+            animate=ft.Animation(220, ft.AnimationCurve.EASE_OUT),
+            shadow=ft.BoxShadow(blur_radius=14, color="#00000010", offset=ft.Offset(0, 8)),
+            content=ft.Row(
+                spacing=14,
+                vertical_alignment=ft.CrossAxisAlignment.CENTER,
                 controls=[
                     ft.Container(
-                        width=64,
-                        height=64,
+                        width=54,
+                        height=54,
                         border_radius=16,
-                        bgcolor="#4A707A",
+                        bgcolor=PINK_SOFT,
                         alignment=ft.alignment.center,
-                        content=ft.Icon(icon, size=40, color="white"),
+                        content=ft.Icon(icon, size=28, color=PINK_STRONG),
                     ),
-                    ft.Text(
-                        title,
-                        size=16,
-                        weight=ft.FontWeight.BOLD,
-                        color="white",
-                        text_align=ft.TextAlign.CENTER,
-                    ),
-                    ft.Text(
-                        subtitle,
-                        size=12,
-                        color="#2F4F55",
-                        text_align=ft.TextAlign.CENTER,
+                    ft.Column(
+                        expand=True,
+                        spacing=4,
+                        controls=[
+                            ft.Text(title, size=14, weight=ft.FontWeight.BOLD, color=TEXT_DARK),
+                            ft.Text(subtitle, size=12, color=TEXT_MUTED),
+                        ],
                     ),
                 ],
             ),
@@ -163,15 +222,13 @@ def main(page: ft.Page):
 
         def on_hover(e: ft.HoverEvent):
             if e.data == "true":
-                card.bgcolor = "#BFE0E0"
-                card.shadow = ft.BoxShadow(
-                    blur_radius=20, spread_radius=2, color="#00000018", offset=ft.Offset(0, 10)
-                )
+                card.bgcolor = "#FFF7FA"
+                card.scale = 1.02
+                card.shadow = ft.BoxShadow(blur_radius=22, color="#0000001A", offset=ft.Offset(0, 12))
             else:
-                card.bgcolor = CARD_BG
-                card.shadow = ft.BoxShadow(
-                    blur_radius=12, spread_radius=1, color="#00000010", offset=ft.Offset(0, 6)
-                )
+                card.bgcolor = "white"
+                card.scale = 1.0
+                card.shadow = ft.BoxShadow(blur_radius=14, color="#00000010", offset=ft.Offset(0, 8))
             page.update()
 
         card.on_hover = on_hover
@@ -224,37 +281,12 @@ def main(page: ft.Page):
         page.update()
 
     # -----------------------------
-    # Switch into the main app UI
-    # -----------------------------
-    def switch_to_taskwise_app():
-        try:
-            page.views.clear()
-        except:
-            pass
-
-        page.controls.clear()
-        page.scroll = None
-        page.padding = 0
-        page.appbar = None
-        page.navigation_bar = None
-        page.floating_action_button = None
-        page.drawer = None
-        page.dialog = None
-
-        try:
-            page.overlay.clear()
-        except:
-            pass
-
-        page.update()
-        run_taskwise_app(page, on_logout=logout)
-
-    # -----------------------------
     # Simple navigation helpers
     # -----------------------------
     def show_front_page():
         page.clean()
-        page.add(front_page_view)
+        page.add(build_front_page_view())
+        page.run_task(front_page_animate_in)
 
     def show_signup_page():
         page.clean()
@@ -298,9 +330,6 @@ def main(page: ft.Page):
         pw = password_field.value or ""
         pw2 = confirm_password_field.value or ""
 
-        # -----------------------------
-        # Validation checks with suggestions
-        # -----------------------------
         if not name or not email or not pw or not pw2:
             show_message("Please fill in all fields.", suggestion="Double-check that you entered your name, email, and both passwords.")
             return
@@ -313,9 +342,6 @@ def main(page: ft.Page):
             show_message("Password must be at least 8 characters.", suggestion="Try adding numbers or symbols for stronger security.")
             return
 
-        # -----------------------------
-        # Continue with signup logic
-        # -----------------------------
         try:
             if db.get_user_by_email(email):
                 show_message("Email is already registered.", suggestion="Try logging in instead, or use a different email.")
@@ -334,7 +360,6 @@ def main(page: ft.Page):
         except Exception as ex:
             show_message(f"Signup failed: {ex}", suggestion="Please retry or contact admin if the issue persists.")
 
-
     # -----------------------------
     # Admin panel
     # -----------------------------
@@ -348,43 +373,47 @@ def main(page: ft.Page):
                 BUTTON_COLOR,
                 BG_COLOR,
                 FORM_BG,
-                on_logout=logout,  # logout callback
+                on_logout=logout,
             )
         )
         page.update()
 
     # -----------------------------
-    # Login handler
+    # ✅ Login handler WITH LOADER
     # -----------------------------
-    def handle_login(e):
+    async def handle_login_async(e):
+        nonlocal _is_loading
+        if _is_loading:
+            return
+
         email = (login_email_field.value or "").strip().lower()
         pw = login_password_field.value or ""
 
-        # -----------------------------
-        # Validation checks with suggestions
-        # -----------------------------
         if not email or not pw:
             show_message("Please enter email and password.", suggestion="Both fields are required to log in.")
             return
+
+        show_loader()
+        await asyncio.sleep(LOGIN_LOADING_SECONDS)
 
         try:
             user = db.get_user_by_email(email)
 
             if not user:
+                hide_loader()
                 show_message("Invalid email or password.", suggestion="Check for typos or sign up if you don’t have an account.")
                 return
 
             if user.get("is_banned"):
+                hide_loader()
                 show_message("Your account is banned. Contact admin.", suggestion="Use the 'Contact Admin' option for support.")
                 return
 
             if not bcrypt.verify(pw, user["password_hash"]):
+                hide_loader()
                 show_message("Invalid email or password.", suggestion="Try resetting your password if you forgot it.")
                 return
 
-            # -----------------------------
-            # Continue with login logic
-            # -----------------------------
             page.session.set("user_id", user["id"])
             page.session.set("user_name", user["name"])
             page.session.set("user_role", user["role"])
@@ -392,20 +421,21 @@ def main(page: ft.Page):
             db.add_log("Login", f"{user['email']} logged in", user_id=user["id"])
 
             if user["role"] == "admin":
-                print("ADMIN LOGIN → ADMIN PANEL")
                 show_admin()
+                hide_loader()
                 return
 
-            print("USER LOGIN → TASKWISE APP")
             run_taskwise_app(
                 page,
                 on_logout=logout,
                 user={"id": user["id"], "username": user["name"], "role": user["role"]},
             )
 
-        except Exception as ex:
-            show_message(f"Login failed: {ex}", suggestion="Please retry or contact admin if the issue persists.")
+            hide_loader()
 
+        except Exception as ex:
+            hide_loader()
+            show_message(f"Login failed: {ex}", suggestion="Please retry or contact admin if the issue persists.")
 
     # -----------------------------
     # Header builders
@@ -413,11 +443,11 @@ def main(page: ft.Page):
     def create_front_header():
         return ft.Container(
             padding=ft.padding.symmetric(horizontal=22, vertical=10),
-            bgcolor=BG_COLOR,
+            bgcolor=PINK_BG,  # ✅ pink
             content=ft.Row(
                 alignment=ft.MainAxisAlignment.SPACE_BETWEEN,
                 controls=[
-                    ft.Text("TaskWise", size=18, weight=ft.FontWeight.BOLD, color=PRIMARY_TEXT),
+                    ft.Text("TaskWise", size=18, weight=ft.FontWeight.BOLD, color=PINK_DARK),
                     ft.Row(
                         spacing=12,
                         controls=[
@@ -426,16 +456,17 @@ def main(page: ft.Page):
                                 border_radius=20,
                                 padding=ft.padding.symmetric(horizontal=22, vertical=8),
                                 bgcolor="white",
+                                border=ft.border.all(1, PINK_CARD),
                                 on_click=lambda e: show_login_page(),
-                                content=ft.Text("Log In", size=13, weight=ft.FontWeight.BOLD, color=PRIMARY_TEXT),
+                                content=ft.Text("Log In", size=13, weight=ft.FontWeight.BOLD, color=PINK_DARK),
                             ),
                             ft.Container(
                                 ink=True,
                                 border_radius=20,
                                 padding=ft.padding.symmetric(horizontal=22, vertical=8),
-                                border=ft.border.all(2, PRIMARY_TEXT),
+                                bgcolor=PINK_STRONG,
                                 on_click=lambda e: show_signup_page(),
-                                content=ft.Text("Sign Up", size=13, weight=ft.FontWeight.BOLD, color=PRIMARY_TEXT),
+                                content=ft.Text("Sign Up", size=13, weight=ft.FontWeight.BOLD, color="white"),
                             ),
                         ],
                     ),
@@ -453,7 +484,7 @@ def main(page: ft.Page):
         )
 
     # -----------------------------
-    # Side panels
+    # Side panels (unchanged)
     # -----------------------------
     signup_sidebar = ft.Container(
         padding=15,
@@ -520,258 +551,268 @@ def main(page: ft.Page):
     )
 
     # -----------------------------
-    # Front page (scrollable)
+    # ✅ FRONT PAGE (PINK + LIVELY + ANIMATED)
     # -----------------------------
-    front_page_view = ft.Container(
-        expand=True,
-        content=ft.Stack(
-            expand=True,
+    hero_wrap = ft.Container()
+    right_card_wrap = ft.Container()
+    features_wrap = ft.Container()
+
+    hero_wrap.opacity = 0.0
+    hero_wrap.offset = ft.Offset(0, 0.06)
+    hero_wrap.animate_opacity = ft.Animation(350, ft.AnimationCurve.EASE_OUT)
+    hero_wrap.animate_offset = ft.Animation(350, ft.AnimationCurve.EASE_OUT)
+
+    right_card_wrap.opacity = 0.0
+    right_card_wrap.offset = ft.Offset(0, 0.06)
+    right_card_wrap.animate_opacity = ft.Animation(430, ft.AnimationCurve.EASE_OUT)
+    right_card_wrap.animate_offset = ft.Animation(430, ft.AnimationCurve.EASE_OUT)
+
+    features_wrap.opacity = 0.0
+    features_wrap.offset = ft.Offset(0, 0.06)
+    features_wrap.animate_opacity = ft.Animation(560, ft.AnimationCurve.EASE_OUT)
+    features_wrap.animate_offset = ft.Animation(560, ft.AnimationCurve.EASE_OUT)
+
+    async def front_page_animate_in():
+        await asyncio.sleep(0.05)
+        hero_wrap.opacity = 1.0
+        hero_wrap.offset = ft.Offset(0, 0)
+        page.update()
+
+        await asyncio.sleep(0.08)
+        right_card_wrap.opacity = 1.0
+        right_card_wrap.offset = ft.Offset(0, 0)
+        page.update()
+
+        await asyncio.sleep(0.10)
+        features_wrap.opacity = 1.0
+        features_wrap.offset = ft.Offset(0, 0)
+        page.update()
+
+    def build_front_page_view():
+        w = page.width or 1000
+        pad_x = 16 if w < 700 else 32
+        hero_size = 34 if w < 700 else 48
+        hero_sub = 14 if w < 700 else 16
+
+        hero_left = ft.Column(
+            horizontal_alignment=ft.CrossAxisAlignment.START,
+            spacing=14,
             controls=[
-                # Background gradient
                 ft.Container(
-                    expand=True,
-                    gradient=ft.LinearGradient(
-                        begin=ft.alignment.top_left,
-                        end=ft.alignment.bottom_right,
-                        colors=["#F8F6F4", "#EAF6F6", "#F8F6F4"],
+                    padding=ft.padding.symmetric(horizontal=12, vertical=8),
+                    border_radius=999,
+                    bgcolor=PINK_SOFT,
+                    border=ft.border.all(1, "#FFC1D9"),
+                    content=ft.Row(
+                        tight=True,
+                        spacing=8,
+                        controls=[
+                            ft.Icon(ft.Icons.AUTO_AWESOME, size=18, color=PINK_STRONG),
+                            ft.Text("A cute way to stay on track", size=12, color=PINK_DARK, weight=ft.FontWeight.W_700),
+                        ],
                     ),
                 ),
-                # Decorative circles
-                ft.Container(
-                    left=-220,
-                    top=-170,
-                    width=520,
-                    height=520,
-                    border_radius=999,
-                    bgcolor="#D2E9E955",
+                ft.Text(
+                    "Plan Your Day Faster\nWith TaskWise",
+                    size=hero_size,
+                    weight=ft.FontWeight.BOLD,
+                    color=PINK_DARK,
                 ),
-                ft.Container(
-                    right=-260,
-                    top=40,
-                    width=600,
-                    height=600,
-                    border_radius=999,
-                    bgcolor="#C4DFDF55",
+                ft.Text(
+                    "Create tasks, set deadlines, and keep your week organized with a clean calendar and simple reminders.",
+                    size=hero_sub,
+                    color=TEXT_MUTED,
                 ),
-                # Main content
-                ft.ListView(
-                    expand=True,
-                    spacing=0,
-                    padding=0,
+                ft.ResponsiveRow(
+                    columns=12,
+                    spacing=10,
+                    run_spacing=10,
                     controls=[
-                        create_front_header(),
-                        ft.Container(
-                            alignment=ft.alignment.top_center,
-                            padding=ft.padding.symmetric(horizontal=32, vertical=20),
-                            content=ft.Container(
-                                width=1400,
-                                content=ft.Column(
-                                    spacing=24,
-                                    controls=[
-                                        # HERO
-                                        ft.ResponsiveRow(
-                                            columns=12,
-                                            spacing=24,
-                                            run_spacing=24,
-                                            controls=[
-                                                # LEFT
-                                                ft.Container(
-                                                    col={"xs": 12, "sm": 12, "md": 8, "lg": 8, "xl": 8},
-                                                    content=ft.Column(
-                                                        horizontal_alignment=ft.CrossAxisAlignment.START,
-                                                        spacing=14,
-                                                        controls=[
-                                                            ft.Text(
-                                                                "Plan Your Day Faster\nWith TaskWise",
-                                                                size=46,
-                                                                weight=ft.FontWeight.BOLD,
-                                                                color=PRIMARY_TEXT,
-                                                            ),
-                                                            ft.Text(
-                                                                "Create tasks, set deadlines, and stay on track with reminders that keep things simple.",
-                                                                size=16,
-                                                                color=SECONDARY_TEXT,
-                                                            ),
-                                                            ft.ResponsiveRow(
-                                                                columns=12,
-                                                                spacing=10,
-                                                                run_spacing=10,
-                                                                controls=[
-                                                                    ft.Container(
-                                                                        col={"xs": 12, "sm": 6, "md": 4, "lg": 4, "xl": 4},
-                                                                        content=pill("Fast Setup", ft.Icons.FLASH_ON_OUTLINED),
-                                                                    ),
-                                                                    ft.Container(
-                                                                        col={"xs": 12, "sm": 6, "md": 4, "lg": 4, "xl": 4},
-                                                                        content=pill("Calendar View", ft.Icons.CALENDAR_MONTH_OUTLINED),
-                                                                    ),
-                                                                    ft.Container(
-                                                                        col={"xs": 12, "sm": 6, "md": 4, "lg": 4, "xl": 4},
-                                                                        content=pill("Smart Reminders", ft.Icons.NOTIFICATIONS_OUTLINED),
-                                                                    ),
-                                                                ],
-                                                            ),
-                                                            ft.Row(
-                                                                spacing=14,
-                                                                controls=[
-                                                                    hover_button("Create Account", True, lambda e: show_signup_page()),
-                                                                    hover_button("Contact Admin", False, lambda e: show_contact_admin_page()),
-                                                                ],
-                                                            ),
-                                                            ft.Text(
-                                                                "No credit card needed. Sign up takes under a minute.",
-                                                                size=12,
-                                                                color="#6E8D94",
-                                                            ),
-                                                        ],
-                                                    ),
-                                                ),
-                                                # RIGHT PREVIEW CARD
-                                                ft.Container(
-                                                    col={"xs": 12, "sm": 12, "md": 4, "lg": 4, "xl": 4},
-                                                    content=ft.Container(
-                                                        padding=18,
-                                                        border_radius=22,
-                                                        bgcolor="white",
-                                                        border=ft.border.all(1, "#D6E7E7"),
-                                                        shadow=ft.BoxShadow(
-                                                            blur_radius=16,
-                                                            spread_radius=1,
-                                                            color="#00000014",
-                                                            offset=ft.Offset(0, 8),
-                                                        ),
-                                                        content=ft.Column(
-                                                            spacing=12,
-                                                            controls=[
-                                                                ft.Row(
-                                                                    alignment=ft.MainAxisAlignment.SPACE_BETWEEN,
-                                                                    controls=[
-                                                                        ft.Text(
-                                                                            "Today",
-                                                                            size=14,
-                                                                            weight=ft.FontWeight.BOLD,
-                                                                            color=PRIMARY_TEXT,
-                                                                        ),
-                                                                        ft.Container(
-                                                                            padding=ft.padding.symmetric(horizontal=10, vertical=6),
-                                                                            border_radius=999,
-                                                                            bgcolor=FORM_BG,
-                                                                            content=ft.Text("3 Tasks", size=12, color=PRIMARY_TEXT),
-                                                                        ),
-                                                                    ],
-                                                                ),
-                                                                ft.Container(
-                                                                    padding=12,
-                                                                    border_radius=16,
-                                                                    bgcolor=FORM_BG,
-                                                                    content=ft.Column(
-                                                                        spacing=10,
-                                                                        controls=[
-                                                                            ft.Row(
-                                                                                spacing=10,
-                                                                                controls=[
-                                                                                    ft.Icon(ft.Icons.CHECK_CIRCLE_OUTLINE, color=SUCCESS_GREEN),
-                                                                                    ft.Text("Finish activity plan", color=PRIMARY_TEXT, weight=ft.FontWeight.W_600),
-                                                                                ],
-                                                                            ),
-                                                                            ft.Row(
-                                                                                spacing=10,
-                                                                                controls=[
-                                                                                    ft.Icon(ft.Icons.SCHEDULE, color=PRIMARY_TEXT),
-                                                                                    ft.Text("Review upcoming deadlines", color=PRIMARY_TEXT, weight=ft.FontWeight.W_600),
-                                                                                ],
-                                                                            ),
-                                                                            ft.Row(
-                                                                                spacing=10,
-                                                                                controls=[
-                                                                                    ft.Icon(ft.Icons.NOTIFICATIONS_ACTIVE_OUTLINED, color=PRIMARY_TEXT),
-                                                                                    ft.Text("Set reminder for tomorrow", color=PRIMARY_TEXT, weight=ft.FontWeight.W_600),
-                                                                                ],
-                                                                            ),
-                                                                        ],
-                                                                    ),
-                                                                ),
-                                                                ft.Container(
-                                                                    padding=12,
-                                                                    border_radius=16,
-                                                                    bgcolor="#F7FBFB",
-                                                                    border=ft.border.all(1, "#E0EEEE"),
-                                                                    content=ft.Row(
-                                                                        alignment=ft.MainAxisAlignment.SPACE_BETWEEN,
-                                                                        controls=[
-                                                                            ft.Text("Next reminder", size=12, color=SECONDARY_TEXT),
-                                                                            ft.Text(
-                                                                                "9:00 AM",
-                                                                                size=12,
-                                                                                color=PRIMARY_TEXT,
-                                                                                weight=ft.FontWeight.BOLD,
-                                                                            ),
-                                                                        ],
-                                                                    ),
-                                                                ),
-                                                            ],
-                                                        ),
-                                                    ),
-                                                ),
-                                            ],
-                                        ),
-                                        ft.Container(height=20),
-                                        # "What You Get" header
-                                        ft.Row(
-                                            controls=[
-                                                ft.Container(
-                                                    expand=True,
-                                                    content=ft.Text(
-                                                        "What You Get",
-                                                        size=18,
-                                                        weight=ft.FontWeight.BOLD,
-                                                        color=PRIMARY_TEXT,
-                                                    ),
-                                                ),
-                                            ],
-                                        ),
-                                        # Feature Cards
-                                        ft.ResponsiveRow(
-                                            columns=12,
-                                            spacing=22,
-                                            run_spacing=22,
-                                            controls=[
-                                                ft.Container(
-                                                    col={"xs": 12, "sm": 6, "md": 4, "lg": 4, "xl": 4},
-                                                    content=feature_card(
-                                                        "Task Management",
-                                                        "Sort your work by priority and keep each day clear.",
-                                                        ft.Icons.TASK_ALT,
-                                                    ),
-                                                ),
-                                                ft.Container(
-                                                    col={"xs": 12, "sm": 6, "md": 4, "lg": 4, "xl": 4},
-                                                    content=feature_card(
-                                                        "Calendar View",
-                                                        "See deadlines and plans without digging through menus.",
-                                                        ft.Icons.CALENDAR_MONTH,
-                                                    ),
-                                                ),
-                                                ft.Container(
-                                                    col={"xs": 12, "sm": 6, "md": 4, "lg": 4, "xl": 4},
-                                                    content=feature_card(
-                                                        "Smart Reminders",
-                                                        "Get timely nudges so tasks do not slip through.",
-                                                        ft.Icons.NOTIFICATIONS_ACTIVE,
-                                                    ),
-                                                ),
-                                            ],
-                                        ),
-                                        ft.Container(height=18),
-                                    ],
-                                ),
+                        ft.Container(col={"xs": 12, "sm": 6, "md": 4}, content=pill("Fast Setup", ft.Icons.FLASH_ON_OUTLINED)),
+                        ft.Container(col={"xs": 12, "sm": 6, "md": 4}, content=pill("Calendar View", ft.Icons.CALENDAR_MONTH_OUTLINED)),
+                        ft.Container(col={"xs": 12, "sm": 6, "md": 4}, content=pill("Smart Reminders", ft.Icons.NOTIFICATIONS_OUTLINED)),
+                    ],
+                ),
+                ft.Row(
+                    spacing=12,
+                    wrap=True,
+                    controls=[
+                        hover_button("Create Account", True, lambda e: show_signup_page()),
+                        hover_button("Contact Admin", False, lambda e: show_contact_admin_page()),
+                    ],
+                ),
+                ft.Text("Sign up takes under a minute.", size=12, color=TEXT_MUTED),
+            ],
+        )
+
+        preview_card = ft.Container(
+            padding=18,
+            border_radius=22,
+            bgcolor="white",
+            border=ft.border.all(1, PINK_CARD),
+            shadow=ft.BoxShadow(blur_radius=18, spread_radius=1, color="#00000012", offset=ft.Offset(0, 10)),
+            content=ft.Column(
+                spacing=12,
+                controls=[
+                    ft.Row(
+                        alignment=ft.MainAxisAlignment.SPACE_BETWEEN,
+                        controls=[
+                            ft.Row(
+                                spacing=8,
+                                controls=[
+                                    ft.Container(
+                                        width=34,
+                                        height=34,
+                                        border_radius=12,
+                                        bgcolor=PINK_SOFT,
+                                        alignment=ft.alignment.center,
+                                        content=ft.Icon(ft.Icons.CALENDAR_MONTH, color=PINK_STRONG),
+                                    ),
+                                    ft.Column(
+                                        spacing=1,
+                                        controls=[
+                                            ft.Text("Today", size=13, weight=ft.FontWeight.BOLD, color=TEXT_DARK),
+                                            ft.Text("Quick glance", size=11, color=TEXT_MUTED),
+                                        ],
+                                    ),
+                                ],
                             ),
+                            ft.Container(
+                                padding=ft.padding.symmetric(horizontal=10, vertical=6),
+                                border_radius=999,
+                                bgcolor=PINK_SOFT,
+                                border=ft.border.all(1, "#FFC1D9"),
+                                content=ft.Text("3 Tasks", size=12, color=PINK_DARK, weight=ft.FontWeight.W_700),
+                            ),
+                        ],
+                    ),
+                    ft.Container(
+                        padding=12,
+                        border_radius=16,
+                        bgcolor="#FFF7FA",
+                        border=ft.border.all(1, "#FFE0EC"),
+                        content=ft.Column(
+                            spacing=10,
+                            controls=[
+                                ft.Row(spacing=10, controls=[ft.Icon(ft.Icons.CHECK_CIRCLE_OUTLINE, color=PINK_STRONG),
+                                                            ft.Text("Finish activity plan", color=TEXT_DARK, weight=ft.FontWeight.W_600)]),
+                                ft.Row(spacing=10, controls=[ft.Icon(ft.Icons.SCHEDULE, color=PINK_DARK),
+                                                            ft.Text("Review upcoming deadlines", color=TEXT_DARK, weight=ft.FontWeight.W_600)]),
+                                ft.Row(spacing=10, controls=[ft.Icon(ft.Icons.NOTIFICATIONS_ACTIVE_OUTLINED, color=PINK_DARK),
+                                                            ft.Text("Set reminder for tomorrow", color=TEXT_DARK, weight=ft.FontWeight.W_600)]),
+                            ],
                         ),
+                    ),
+                    ft.Container(
+                        padding=12,
+                        border_radius=16,
+                        bgcolor="white",
+                        border=ft.border.all(1, "#FFE0EC"),
+                        content=ft.Row(
+                            alignment=ft.MainAxisAlignment.SPACE_BETWEEN,
+                            controls=[
+                                ft.Text("Next reminder", size=12, color=TEXT_MUTED),
+                                ft.Text("9:00 AM", size=12, color=PINK_DARK, weight=ft.FontWeight.BOLD),
+                            ],
+                        ),
+                    ),
+                ],
+            ),
+        )
+
+        hero_wrap.content = hero_left
+        right_card_wrap.content = preview_card
+
+        features_wrap.content = ft.Column(
+            spacing=14,
+            controls=[
+                ft.Text("What You Get", size=18, weight=ft.FontWeight.BOLD, color=PINK_DARK),
+                ft.ResponsiveRow(
+                    columns=12,
+                    spacing=18,
+                    run_spacing=18,
+                    controls=[
+                        ft.Container(col={"xs": 12, "sm": 6, "md": 4}, content=feature_card(
+                            "Task Management",
+                            "Keep your plans simple and easy to follow.",
+                            ft.Icons.TASK_ALT,
+                        )),
+                        ft.Container(col={"xs": 12, "sm": 6, "md": 4}, content=feature_card(
+                            "Calendar View",
+                            "See deadlines without digging through pages.",
+                            ft.Icons.CALENDAR_MONTH,
+                        )),
+                        ft.Container(col={"xs": 12, "sm": 6, "md": 4}, content=feature_card(
+                            "Smart Reminders",
+                            "Stay notified so you do not miss tasks.",
+                            ft.Icons.NOTIFICATIONS_ACTIVE,
+                        )),
                     ],
                 ),
             ],
-        ),
-    )
+        )
+
+        return ft.Container(
+            expand=True,
+            content=ft.Stack(
+                expand=True,
+                controls=[
+                    ft.Container(
+                        expand=True,
+                        gradient=ft.LinearGradient(
+                            begin=ft.alignment.top_left,
+                            end=ft.alignment.bottom_right,
+                            colors=[PINK_BG, "#FFE6F0", "#FFF7FB"],
+                        ),
+                    ),
+                    ft.Container(left=-260, top=-190, width=520, height=520, border_radius=999, bgcolor="#F200FF"),
+                    ft.Container(right=-280, top=60, width=600, height=600, border_radius=999, bgcolor="#FF0000AA"),
+                    ft.Container(left=140, bottom=-280, width=520, height=520, border_radius=999, bgcolor="#FF00BF1F"),
+                    ft.Container(right=100, bottom=-280, width=520, height=520, border_radius=999, bgcolor="#3474211F"),
+                    ft.ListView(
+                        expand=True,
+                        spacing=0,
+                        padding=0,
+                        controls=[
+                            create_front_header(),
+                            ft.Container(
+                                alignment=ft.alignment.top_center,
+                                padding=ft.padding.symmetric(horizontal=pad_x, vertical=22),
+                                content=ft.Container(
+                                    width=1200,
+                                    content=ft.Column(
+                                        spacing=22,
+                                        controls=[
+                                            ft.ResponsiveRow(
+                                                columns=12,
+                                                spacing=22,
+                                                run_spacing=22,
+                                                controls=[
+                                                    ft.Container(col={"xs": 12, "sm": 12, "md": 8}, content=hero_wrap),
+                                                    ft.Container(col={"xs": 12, "sm": 12, "md": 4}, content=right_card_wrap),
+                                                ],
+                                            ),
+                                            ft.Divider(height=10, color=ft.Colors.with_opacity(0.18, PINK_DARK)),
+                                            features_wrap,
+                                            ft.Container(height=10),
+                                            ft.Container(
+                                                alignment=ft.alignment.center,
+                                                padding=ft.padding.only(bottom=18),
+                                                content=ft.Text(
+                                                    "TaskWise keeps your day clear, cute, and organized.",
+                                                    size=12,
+                                                    color=TEXT_MUTED,
+                                                ),
+                                            ),
+                                        ],
+                                    ),
+                                ),
+                            ),
+                        ],
+                    ),
+                ],
+            ),
+        )
 
     # -----------------------------
     # Signup view
@@ -873,7 +914,7 @@ def main(page: ft.Page):
                                             login_password_field,
                                             ft.ElevatedButton(
                                                 "Login",
-                                                on_click=handle_login,
+                                                on_click=lambda e: page.run_task(handle_login_async, e),
                                                 bgcolor=BUTTON_COLOR,
                                                 color=PRIMARY_TEXT,
                                                 width=200,
@@ -895,8 +936,16 @@ def main(page: ft.Page):
         ),
     )
 
-    # start at the landing page
-    show_front_page()
+    # -----------------------------
+    # ✅ SHOW LOADER WHEN APP OPENS
+    # -----------------------------
+    async def app_boot():
+        show_loader()
+        await asyncio.sleep(APP_LOADING_SECONDS)
+        hide_loader()
+        show_front_page()
+
+    page.run_task(app_boot)
 
 
 ft.app(target=main, assets_dir="assets")
