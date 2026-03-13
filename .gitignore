@@ -3,19 +3,16 @@ __pycache__/
 *.pyc
 *.pyo
 *.pyd
-
-# Virtual environment
 venv/
-
-# VS Code settings
-.vscode/
-
-# Temporary files created by VS Code Code Runner
-tempCodeRunnerFile.py
-
 .env
-.vault_key
 
-# Optional
-*.sqlite3
-*.db
+# Node
+node_modules/
+dist/
+
+# Vite
+.vite/
+
+# OS
+.DS_Store
+Thumbs.db
