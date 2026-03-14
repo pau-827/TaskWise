@@ -32,11 +32,17 @@ class AppState:
         # update() callback (set by TaskWiseApp)
         self._update_callback = None
 
+        # delete account callback (set by TaskWiseApp)
+        self._on_delete_account_callback = None
+
     # -----------------------
     # update/render helpers
     # -----------------------
     def set_update_callback(self, fn):
         self._update_callback = fn
+
+    def set_delete_account_callback(self, fn):
+        self._on_delete_account_callback = fn
 
     def update(self):
         if self._update_callback:
@@ -74,6 +80,15 @@ class AppState:
         self.colors = get_theme("Light Mode")
 
         self.update()
+
+    def on_account_deleted(self):
+        """Clears user state then fires the delete/logout callback to return to homepage."""
+        self.user = None
+        self.theme_name = "Light Mode"
+        self.colors = get_theme("Light Mode")
+
+        if self._on_delete_account_callback:
+            self._on_delete_account_callback()
 
     # -----------------------
     # theme/settings helpers

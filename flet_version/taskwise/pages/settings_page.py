@@ -28,7 +28,6 @@ class SettingsPage:
             else:
                 page.update()
 
-
         # -----------------------------
         # Get the current user safely
         # -----------------------------
@@ -218,33 +217,26 @@ class SettingsPage:
                     page.update()
                     return
 
+                # Close dialog and show success message first
                 dlg.open = False
-                page.update()
-
-                # Logout / clear user state after delete
-                try:
-                    if hasattr(S, "on_user_logout"):
-                        S.on_user_logout()
-                except Exception:
-                    S.user = None
-
-                page.snack_bar = ft.SnackBar(content=ft.Text("Account deleted successfully."), bgcolor=C("SUCCESS_COLOR"))
+                page.snack_bar = ft.SnackBar(
+                    content=ft.Text("Account deleted successfully."),
+                    bgcolor=C("SUCCESS_COLOR"),
+                )
                 page.snack_bar.open = True
                 page.update()
 
-                # Try to navigate to a reasonable page name
-                def safe_go(name: str) -> bool:
+                # Clear state and redirect to homepage (same path as logout)
+                try:
+                    S.on_account_deleted()
+                except Exception:
+                    # Fallback: manually clear and call logout if on_account_deleted isn't available
                     try:
-                        if hasattr(S, "go"):
-                            S.go(name)
-                            return True
+                        S.user = None
+                        if hasattr(S, "_on_delete_account_callback") and S._on_delete_account_callback:
+                            S._on_delete_account_callback()
                     except Exception:
-                        return False
-                    return False
-
-                for target in ("loginpage", "login", "startpage", "mainpage"):
-                    if safe_go(target):
-                        break
+                        pass
 
             dlg = ft.AlertDialog(
                 modal=True,
@@ -454,7 +446,6 @@ class SettingsPage:
             dlg.open = True
             page.update()
 
-
         # -----------------------------
         # Theme dropdown
         # -----------------------------
@@ -555,7 +546,7 @@ class SettingsPage:
             )
 
         # -----------------------------
-        # Left panel content (logout removed)
+        # Left panel content
         # -----------------------------
         settings_stack = ft.Column(
             spacing=14,

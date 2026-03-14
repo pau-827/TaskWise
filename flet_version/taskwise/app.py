@@ -16,6 +16,9 @@ class TaskWiseApp:
         self.state = AppState()
         self.state.set_update_callback(self.update_ui)
 
+        # Wire up the delete-account callback to the same on_logout handler
+        self.state.set_delete_account_callback(self.on_logout)
+
         # Apply logged-in user (safe)
         user = user or {}
         self.state.on_user_login(
@@ -123,7 +126,7 @@ class TaskWiseApp:
                     spacing=8,
                     controls=[
                         ft.Text("No tasks due in the next 24 hours.", color=color("TEXT_PRIMARY", "#111111")),
-                        ft.Text("You’re all caught up.", size=12, color=color("TEXT_SECONDARY", "#666666")),
+                        ft.Text("You're all caught up.", size=12, color=color("TEXT_SECONDARY", "#666666")),
                     ],
                 )
             else:
@@ -203,7 +206,7 @@ class TaskWiseApp:
         self._show_notifications_dialog()
 
     # ----------------------------
-    # HEADER (UPDATED)
+    # HEADER
     # ----------------------------
     def _header(self) -> ft.Control:
         C = self.state.colors
@@ -266,7 +269,6 @@ class TaskWiseApp:
             ],
         )
 
-        # Move bell AFTER username + profile icon
         if self.state.user:
             username = (self.state.user.get("username") or self.state.user.get("name") or "User").strip()
 
@@ -283,7 +285,6 @@ class TaskWiseApp:
                 items=[ft.PopupMenuItem(text="Logout", on_click=do_logout)],
             )
 
-            # NEW ORDER: name → profile → bell
             right = ft.Row(
                 [
                     user_label,
