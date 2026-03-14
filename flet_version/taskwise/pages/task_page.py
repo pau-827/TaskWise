@@ -8,12 +8,14 @@ from taskwise.theme import CATEGORIES  # ["Personal","Work","Study","Others","Bi
 class TaskPage:
     """
     CONNECTED TASK PAGE (Fixed):
-    - No white “flash” on refresh: hosts are created ONCE and only their content is replaced.
+    - No white "flash" on refresh: hosts are created ONCE and only their content is replaced.
     - Loader overlay uses theme colors (no sudden pure-white panel).
     - Prevents double actions while loading.
     - Safe snackbars on failures.
     - Keeps: pie empty state, search without flicker, edit/delete, confirm delete,
       sorting menu, drag-to-reorder for Custom, DatePicker + TimePicker.
+    - Blank title → auto-assigns "Untitled (N)" with gap reuse.
+    - Blank category → falls back to "Others".
     """
 
     def __init__(self, state):
@@ -30,7 +32,7 @@ class TaskPage:
         self._due_date_picker: Optional[ft.DatePicker] = None
         self._due_time_picker: Optional[ft.TimePicker] = None
 
-        # small “movement” on refresh (rotate chart)
+        # small "movement" on refresh (rotate chart)
         self._chart_rotation = 0
 
         # Custom ordering (drag-to-reorder)
@@ -133,6 +135,33 @@ class TaskPage:
     def _safe_update(self, control: Optional[ft.Control]):
         if self._mounted(control):
             control.update()
+
+    # ---------------------------
+    # Auto-title helper
+    # ---------------------------
+    def _next_untitled(self, existing_tasks: List[tuple]) -> str:
+        """
+        Returns the next available Untitled title with gap reuse:
+          first gap → "Untitled"
+          second    → "Untitled (1)"
+          third     → "Untitled (2)"  ...and so on.
+        Uses 0 internally to represent the bare "Untitled" slot.
+        """
+        used_nums = set()
+        for t in existing_tasks:
+            t_title = (t[1] or "").strip()
+            if t_title == "Untitled":
+                used_nums.add(0)
+            elif t_title.startswith("Untitled (") and t_title.endswith(")"):
+                try:
+                    n = int(t_title[len("Untitled ("):-1])
+                    used_nums.add(n)
+                except ValueError:
+                    pass
+        n = 0
+        while n in used_nums:
+            n += 1
+        return "Untitled" if n == 0 else f"Untitled ({n})"
 
     # ---------------------------
     # Loading helpers
@@ -387,7 +416,7 @@ class TaskPage:
             val = selected_value if selected_value in CATEGORIES else None
             return ft.Dropdown(
                 value=val,
-                hint_text="Select Category",
+                hint_text="Select Category (optional — defaults to Others)",
                 options=[ft.dropdown.Option(x) for x in CATEGORIES],
                 bgcolor=INPUT_BG,
                 filled=True,
@@ -478,7 +507,7 @@ class TaskPage:
         # ---------------------------
         def show_add_task_dialog():
             title_tf = ft.TextField(
-                hint_text="Task Title",
+                hint_text="Task Title (leave blank for auto-title)",
                 bgcolor=INPUT_BG,
                 filled=True,
                 border_color=C("BORDER_COLOR"),
@@ -560,19 +589,18 @@ class TaskPage:
                     return
 
                 title = (title_tf.value or "").strip()
-                cat = (category_dd.value or "").strip()
+                # Auto-assign "Untitled (N)" with gap reuse if title is blank
                 if not title:
-                    self._snack(page, "Task name is required. Please enter a title.", C("ERROR_COLOR"))
-                    return
-                if len(title) < 3:
-                    self._snack(page, "Task name is too short. Please enter at least 3 characters.", C("ERROR_COLOR"))
-                    return
+                    existing = db.get_tasks_by_user(S.user["id"])
+                    title = self._next_untitled(existing)
+
+                # Length guards (only after auto-title is resolved)
                 if len(title) > 80:
                     self._snack(page, "Task name is too long. Please keep it under 80 characters.", C("ERROR_COLOR"))
                     return
-                if not cat:
-                    self._snack(page, "Category is required. Please select one.", C("ERROR_COLOR"))
-                    return
+
+                # Category fallback to "Others" if nothing selected
+                cat = (category_dd.value or "").strip() or "Others"
 
                 desc = (desc_tf.value or "").strip()
                 if len(desc) > 250:
@@ -695,7 +723,7 @@ class TaskPage:
 
             title_tf = ft.TextField(
                 value=old_title,
-                hint_text="Task Title",
+                hint_text="Task Title (leave blank for auto-title)",
                 bgcolor=INPUT_BG,
                 filled=True,
                 border_color=C("BORDER_COLOR"),
@@ -778,19 +806,20 @@ class TaskPage:
                     return
 
                 title = (title_tf.value or "").strip()
-                cat = (category_dd.value or "").strip()
+                # Auto-assign "Untitled (N)" with gap reuse if title is cleared
                 if not title:
-                    self._snack(page, "Task name is required. Please enter a title.", C("ERROR_COLOR"))
-                    return
-                if len(title) < 3:
-                    self._snack(page, "Task name is too short. Please enter at least 3 characters.", C("ERROR_COLOR"))
-                    return
+                    existing = db.get_tasks_by_user(S.user["id"])
+                    # Exclude the task being edited so it doesn't count itself
+                    existing = [t for t in existing if t[0] != task_id]
+                    title = self._next_untitled(existing)
+
+                # Length guards (only after auto-title is resolved)
                 if len(title) > 80:
                     self._snack(page, "Task name is too long. Please keep it under 80 characters.", C("ERROR_COLOR"))
                     return
-                if not cat:
-                    self._snack(page, "Category is required. Please select one.", C("ERROR_COLOR"))
-                    return
+
+                # Category fallback to "Others" if nothing selected
+                cat = (category_dd.value or "").strip() or "Others"
 
                 desc = (desc_tf.value or "").strip()
                 if len(desc) > 250:
@@ -1104,7 +1133,10 @@ class TaskPage:
             cat_counts = {c: 0 for c in CATEGORIES}
             for t in tasks:
                 c = (t[3] or "").strip()
-                if c in cat_counts:
+                # Tasks with no category are bucketed into "Others"
+                if not c or c not in cat_counts:
+                    cat_counts["Others"] += 1
+                else:
                     cat_counts[c] += 1
 
             if total == 0:
