@@ -26,7 +26,7 @@ def init_db():
     conn = connect()
     cursor = conn.cursor()
 
-    # Users table (matches the UI fields)
+    # Users table
     cursor.execute("""
         CREATE TABLE IF NOT EXISTS users (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -39,7 +39,7 @@ def init_db():
         )
     """)
 
-    # Safe column upgrades (SQLite has limits on ALTER defaults)
+    # Safe column upgrades
     cursor.execute("PRAGMA table_info(users)")
     cols = [row[1] for row in cursor.fetchall()]
 
@@ -50,7 +50,7 @@ def init_db():
         cursor.execute("ALTER TABLE users ADD COLUMN created_at TIMESTAMP")
         cursor.execute("UPDATE users SET created_at = CURRENT_TIMESTAMP WHERE created_at IS NULL")
 
-    # Tasks table (linked to users)
+    # Tasks table
     cursor.execute("""
         CREATE TABLE IF NOT EXISTS tasks (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -78,7 +78,7 @@ def init_db():
         )
     """)
 
-    # Logs table (admin/user actions)
+    # Logs table
     cursor.execute("""
         CREATE TABLE IF NOT EXISTS logs (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -87,6 +87,20 @@ def init_db():
             action TEXT NOT NULL,
             details TEXT,
             created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+        )
+    """)
+
+    # Journals table
+    cursor.execute("""
+        CREATE TABLE IF NOT EXISTS journals (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            user_id INTEGER NOT NULL,
+            title TEXT NOT NULL DEFAULT 'Untitled',
+            content TEXT DEFAULT '',
+            mood TEXT DEFAULT '',
+            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+            updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+            FOREIGN KEY (user_id) REFERENCES users(id)
         )
     """)
 
@@ -245,8 +259,9 @@ def delete_user(user_id):
     conn = connect()
     cursor = conn.cursor()
 
-    # Remove related rows first, then the user row
+    # Remove all related rows before deleting the user
     cursor.execute("DELETE FROM tasks WHERE user_id = ?", (user_id,))
+    cursor.execute("DELETE FROM journals WHERE user_id = ?", (user_id,))
     cursor.execute("DELETE FROM app_settings WHERE user_id = ?", (user_id,))
     cursor.execute("DELETE FROM logs WHERE user_id = ?", (user_id,))
     cursor.execute("DELETE FROM users WHERE id = ?", (user_id,))
@@ -302,7 +317,9 @@ def get_logs():
         })
     return logs
 
-# Helper Function
+# -----------------------------
+# Helper: auto-title for tasks
+# -----------------------------
 def _generate_untitled_name(user_id):
     conn = connect()
     cursor = conn.cursor()
@@ -319,21 +336,20 @@ def _generate_untitled_name(user_id):
 
     for t in existing_titles:
         t = (t or "").strip()
-
         if t == "Untitled":
             used_numbers.add(0)
-        elif t.startswith("Untitled(") and t.endswith(")"):
+        elif t.startswith("Untitled (") and t.endswith(")"):
             try:
-                num = int(t[len("Untitled("):-1])
+                num = int(t[len("Untitled ("):-1])
                 used_numbers.add(num)
-            except:
+            except Exception:
                 pass
 
     i = 0
     while i in used_numbers:
         i += 1
 
-    return "Untitled" if i == 0 else f"Untitled({i})"
+    return "Untitled" if i == 0 else f"Untitled ({i})"
 
 # -----------------------------
 # Tasks (per user)
@@ -343,11 +359,9 @@ def add_task(user_id, title, description="", category="", due_date=""):
     description = (description or "").strip()
     category = (category or "").strip()
 
-    # AUTO TITLE LOGIC (GAP REUSE)
     if not title:
         title = _generate_untitled_name(user_id)
 
-    # CATEGORY VALIDATION
     if not category:
         category = "Others"
 
@@ -383,6 +397,17 @@ def update_task(user_id, task_id, title, description, category, due_date, status
     if not category:
         category = "Others"
 
+    conn = connect()
+    cursor = conn.cursor()
+    cursor.execute("""
+        UPDATE tasks
+        SET title=?, description=?, category=?, due_date=?, status=?,
+            updated_at=CURRENT_TIMESTAMP
+        WHERE id=? AND user_id=?
+    """, (title, description, category, due_date, status, task_id, user_id))
+    conn.commit()
+    conn.close()
+
 def update_task_status(user_id, task_id, status):
     conn = connect()
     cursor = conn.cursor()
@@ -400,6 +425,107 @@ def delete_task(user_id, task_id):
     cursor.execute("DELETE FROM tasks WHERE id=? AND user_id=?", (task_id, user_id))
     conn.commit()
     conn.close()
+
+# -----------------------------
+# Journals (per user)
+# -----------------------------
+def add_journal(user_id, title="", content="", mood=""):
+    title = (title or "").strip()
+    content = (content or "").strip()
+    mood = (mood or "").strip()
+
+    if not title:
+        title = _generate_untitled_journal_name(user_id)
+
+    conn = connect()
+    cursor = conn.cursor()
+    cursor.execute(
+        "INSERT INTO journals (user_id, title, content, mood) VALUES (?, ?, ?, ?)",
+        (user_id, title, content, mood),
+    )
+    conn.commit()
+    conn.close()
+
+def get_journals_by_user(user_id):
+    conn = connect()
+    cursor = conn.cursor()
+    cursor.execute("""
+        SELECT id, title, content, mood, created_at, updated_at
+        FROM journals
+        WHERE user_id = ?
+        ORDER BY updated_at DESC
+    """, (user_id,))
+    rows = cursor.fetchall()
+    conn.close()
+    return rows
+
+def update_journal(user_id, journal_id, title, content, mood=""):
+    title = (title or "").strip()
+    content = (content or "").strip()
+    mood = (mood or "").strip()
+
+    if not title:
+        title = _generate_untitled_journal_name(user_id, exclude_id=journal_id)
+
+    conn = connect()
+    cursor = conn.cursor()
+    cursor.execute("""
+        UPDATE journals
+        SET title=?, content=?, mood=?, updated_at=CURRENT_TIMESTAMP
+        WHERE id=? AND user_id=?
+    """, (title, content, mood, journal_id, user_id))
+    conn.commit()
+    conn.close()
+
+def delete_journal(user_id, journal_id):
+    conn = connect()
+    cursor = conn.cursor()
+    cursor.execute("DELETE FROM journals WHERE id=? AND user_id=?", (journal_id, user_id))
+    conn.commit()
+    conn.close()
+
+def _generate_untitled_journal_name(user_id, exclude_id=None):
+    """
+    Returns the next available journal title following the same
+    gap-reuse pattern as tasks:
+      Untitled → Untitled (1) → Untitled (2) → ...
+    exclude_id: skip this journal row (used when editing so it
+    doesn't count the entry being renamed against itself).
+    """
+    conn = connect()
+    cursor = conn.cursor()
+
+    if exclude_id is not None:
+        cursor.execute("""
+            SELECT title FROM journals
+            WHERE user_id=? AND title LIKE 'Untitled%' AND id != ?
+        """, (user_id, exclude_id))
+    else:
+        cursor.execute("""
+            SELECT title FROM journals
+            WHERE user_id=? AND title LIKE 'Untitled%'
+        """, (user_id,))
+
+    existing_titles = [row[0] for row in cursor.fetchall()]
+    conn.close()
+
+    used_numbers = set()
+    for t in existing_titles:
+        t = (t or "").strip()
+        if t == "Untitled":
+            used_numbers.add(0)
+        elif t.startswith("Untitled (") and t.endswith(")"):
+            try:
+                num = int(t[len("Untitled ("):-1])
+                used_numbers.add(num)
+            except Exception:
+                pass
+
+    i = 0
+    while i in used_numbers:
+        i += 1
+
+    return "Untitled" if i == 0 else f"Untitled ({i})"
 
 # -----------------------------
 # Per-user settings

@@ -476,6 +476,7 @@ class TaskPage:
                     dlg.open = False
                     page.update()
                     self._snack(page, "Task deleted!", C("SUCCESS_COLOR"))
+                    S.refresh_badge()
                     self._refresh_all(page, C)
 
                 self._run_with_loading(
@@ -626,6 +627,7 @@ class TaskPage:
                     dialog.open = False
                     page.update()
                     self._snack(page, "Task added!", C("SUCCESS_COLOR"))
+                    S.refresh_badge()
 
                     if self._get_sort_mode() == "Custom":
                         current_tasks = self._get_filtered_tasks()
@@ -846,6 +848,7 @@ class TaskPage:
                     dialog.open = False
                     page.update()
                     self._snack(page, "Task updated!", C("SUCCESS_COLOR"))
+                    S.refresh_badge()
                     self._refresh_all(page, C)
 
                 self._run_with_loading(
@@ -952,6 +955,7 @@ class TaskPage:
                     db.update_task_status(S.user["id"], task_id, new_status)
 
                 def after():
+                    S.refresh_badge()
                     self._refresh_all(page, C)
 
                 self._run_with_loading(

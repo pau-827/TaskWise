@@ -7,8 +7,6 @@ from taskwise.theme import get_theme, THEMES
 class AppState:
 
     def __init__(self):
-        # db is the module; functions are called like:
-        # db.get_setting(user_id, key, default)
         self.db = db
 
         # Default theme before login
@@ -29,11 +27,10 @@ class AppState:
         self.cal_month = today.month
         self.holidays_cache = {}
 
-        # update() callback (set by TaskWiseApp)
+        # Callbacks (set by TaskWiseApp)
         self._update_callback = None
-
-        # delete account callback (set by TaskWiseApp)
         self._on_delete_account_callback = None
+        self._badge_refresh_callback = None   # <-- NEW
 
     # -----------------------
     # update/render helpers
@@ -44,9 +41,17 @@ class AppState:
     def set_delete_account_callback(self, fn):
         self._on_delete_account_callback = fn
 
+    def set_badge_refresh_callback(self, fn):      # <-- NEW
+        self._badge_refresh_callback = fn
+
     def update(self):
         if self._update_callback:
             self._update_callback()
+
+    def refresh_badge(self):                        # <-- NEW
+        """Tell the header to recount and repaint the notification badge."""
+        if self._badge_refresh_callback:
+            self._badge_refresh_callback()
 
     def go(self, view_name: str):
         self.current_view = view_name
@@ -58,13 +63,11 @@ class AppState:
     def on_user_login(self, user: dict):
         self.user = user
 
-        # Load per-user theme
         try:
             saved_theme = self.db.get_setting(self.user["id"], "theme_name", "Light Mode")
         except Exception:
             saved_theme = "Light Mode"
 
-        # Fallback if theme no longer exists
         if saved_theme not in THEMES:
             saved_theme = "Light Mode"
 
@@ -75,10 +78,8 @@ class AppState:
 
     def on_user_logout(self):
         self.user = None
-
         self.theme_name = "Light Mode"
         self.colors = get_theme("Light Mode")
-
         self.update()
 
     def on_account_deleted(self):
@@ -94,18 +95,16 @@ class AppState:
     # theme/settings helpers
     # -----------------------
     def set_theme(self, theme_name: str):
-
         if theme_name not in THEMES:
             theme_name = "Light Mode"
 
         self.theme_name = theme_name
         self.colors = get_theme(theme_name)
 
-        # Persist to DB only if logged in
         if self.user:
             try:
                 self.db.set_setting(self.user["id"], "theme_name", theme_name)
             except Exception:
-                pass  # Silent fail — we don't want the UI to crash
+                pass
 
         self.update()
