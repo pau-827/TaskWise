@@ -98,11 +98,21 @@ def init_db():
             title TEXT NOT NULL DEFAULT 'Untitled',
             content TEXT DEFAULT '',
             mood TEXT DEFAULT '',
+            ai_reflection TEXT DEFAULT '',
+            ai_mood TEXT DEFAULT '',
             created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
             updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
             FOREIGN KEY (user_id) REFERENCES users(id)
         )
     """)
+
+    # Safe migration: add ai columns if upgrading an existing database
+    cursor.execute("PRAGMA table_info(journals)")
+    journal_cols = [row[1] for row in cursor.fetchall()]
+    if "ai_reflection" not in journal_cols:
+        cursor.execute("ALTER TABLE journals ADD COLUMN ai_reflection TEXT DEFAULT ''")
+    if "ai_mood" not in journal_cols:
+        cursor.execute("ALTER TABLE journals ADD COLUMN ai_mood TEXT DEFAULT ''")
 
     conn.commit()
 
@@ -450,7 +460,9 @@ def get_journals_by_user(user_id):
     conn = connect()
     cursor = conn.cursor()
     cursor.execute("""
-        SELECT id, title, content, mood, created_at, updated_at
+        SELECT id, title, content, mood, created_at, updated_at,
+               COALESCE(ai_reflection, '') as ai_reflection,
+               COALESCE(ai_mood, '') as ai_mood
         FROM journals
         WHERE user_id = ?
         ORDER BY updated_at DESC
@@ -459,10 +471,12 @@ def get_journals_by_user(user_id):
     conn.close()
     return rows
 
-def update_journal(user_id, journal_id, title, content, mood=""):
+def update_journal(user_id, journal_id, title, content, mood="", ai_reflection="", ai_mood=""):
     title = (title or "").strip()
     content = (content or "").strip()
     mood = (mood or "").strip()
+    ai_reflection = (ai_reflection or "").strip()
+    ai_mood = (ai_mood or "").strip()
 
     if not title:
         title = _generate_untitled_journal_name(user_id, exclude_id=journal_id)
@@ -471,9 +485,10 @@ def update_journal(user_id, journal_id, title, content, mood=""):
     cursor = conn.cursor()
     cursor.execute("""
         UPDATE journals
-        SET title=?, content=?, mood=?, updated_at=CURRENT_TIMESTAMP
+        SET title=?, content=?, mood=?, ai_reflection=?, ai_mood=?,
+            updated_at=CURRENT_TIMESTAMP
         WHERE id=? AND user_id=?
-    """, (title, content, mood, journal_id, user_id))
+    """, (title, content, mood, ai_reflection, ai_mood, journal_id, user_id))
     conn.commit()
     conn.close()
 
