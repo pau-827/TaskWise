@@ -5,7 +5,7 @@ import { THEMES } from "../theme/themes";
 
 export default function AppThemeProvider({ children }) {
 
-  const [themeName, setThemeName] = useState("light");
+  const [themeName, setThemeName] = useState("pink");
 
   const muiTheme = createTheme(THEMES[themeName]);
 
