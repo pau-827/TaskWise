@@ -12,6 +12,7 @@ import Tasks from "./pages/Tasks";
 import Journal from "./pages/Journal";
 import Calendar from "./pages/Calendar";
 import Settings from "./pages/Settings";
+import Recipes from "./pages/Recipes";
 
 // Redirects to /login if not authenticated
 function ProtectedRoute({ children }) {
@@ -46,6 +47,7 @@ function App() {
           <Route path="/journal" element={<Journal />} />
           <Route path="/calendar" element={<Calendar />} />
           <Route path="/settings" element={<Settings />} />
+          <Route path="/recipes" element={<Recipes />} />
         </Route>
 
         {/* Fallback */}
