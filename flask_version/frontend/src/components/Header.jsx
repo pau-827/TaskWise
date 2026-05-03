@@ -12,6 +12,7 @@ export default function Header() {
   const { user, logout } = useContext(AppContext);
   const { themeName } = useContext(ThemeContext);
   const headerBg = THEMES[themeName]?.custom?.headerBg ?? "#F8F6F4";
+  const headerText = THEMES[themeName]?.custom?.headerText ?? "#1a3a40";
 
   const displayName = user?.user_metadata?.display_name || user?.email?.split("@")[0] || "Guest";
   const initials = displayName.slice(0, 2).toUpperCase();
@@ -31,7 +32,7 @@ export default function Header() {
 
   return (
     <AppBar position="static" elevation={0}
-      sx={{ borderBottom: "1px solid", borderColor: "divider", bgcolor: headerBg }}>
+      sx={{ borderBottom: "1px solid", borderColor: "divider", bgcolor: headerBg, color: headerText }}>
       <Toolbar sx={{ display: "flex", justifyContent: "space-between" }}>
 
         {/* Logo */}

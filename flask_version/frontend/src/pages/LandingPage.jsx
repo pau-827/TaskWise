@@ -135,7 +135,7 @@ export default function LandingPage() {
             letterSpacing: "-0.5px", transition: "color 0.4s ease",
           }}>
             Plan Your Day<br />
-            <span style={{ color: c.headingAccent, transition: "color 0.4s ease" }}>With Clarity</span>
+            <span style={{ color: c.headingAccent, transition: "color 0.4s ease" }}>with TaskWise</span>
           </h1>
 
           <p style={{
