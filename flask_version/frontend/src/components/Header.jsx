@@ -33,7 +33,23 @@ export default function Header() {
   return (
     <AppBar position="static" elevation={0}
       sx={{ borderBottom: "1px solid", borderColor: "divider", bgcolor: headerBg, color: headerText }}>
-      <Toolbar sx={{ display: "flex", justifyContent: "space-between" }}>
+      <Toolbar
+        sx={{
+          display: "flex",
+          justifyContent: "space-between",
+          gap: 2,
+
+          flexWrap: {
+            xs: "wrap",
+            md: "nowrap",
+          },
+
+          py: {
+            xs: 1,
+            md: 0,
+          },
+        }}
+      >
 
         {/* Logo */}
         <Typography
@@ -45,7 +61,14 @@ export default function Header() {
         </Typography>
 
         {/* Nav */}
-        <Box sx={{ display: "flex", gap: 1 }}>
+        <Box
+          sx={{
+            display: "flex",
+            gap: 1,
+            flexWrap: "wrap",
+            justifyContent: "center",
+          }}
+        >
           {navItems.map((item) => {
             const isActive = location.pathname === item.path;
             return (

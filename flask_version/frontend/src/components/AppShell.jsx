@@ -12,7 +12,15 @@ export default function AppShell() {
   return (
     <Box sx={{ minHeight: "100vh", bgcolor: bgColor, transition: "background 0.4s ease" }}>
       <Header />
-      <Box sx={{ width: "100%", px: 3, py: 3, flexGrow: 1, overflow: "hidden" }}>
+      <Box
+        sx={{
+          width: "100%",
+          px: { xs: 1.5, sm: 2, md: 3 },
+          py: 3,
+          flexGrow: 1,
+          overflowX: "auto",
+        }}
+      >
         <Outlet />
       </Box>
     </Box>

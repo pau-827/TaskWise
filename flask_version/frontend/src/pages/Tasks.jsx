@@ -208,11 +208,31 @@ export default function Tasks() {
   })).filter(d => d.value > 0);
 
   return (
-    <Box sx={{ width: "100%", display: "flex", gap: 3, alignItems: "stretch", flexWrap: "wrap" }}>
+    <Box
+      sx={{
+        width: "100%",
+        display: "flex",
+        gap: 3,
+        alignItems: "stretch",
+
+        flexDirection: {
+          xs: "column",
+          lg: "row",
+        },
+
+        overflow: "hidden",
+      }}
+    >
 
       {/* ── LEFT: Task Panel ── */}
-      <Box sx={{ flex: "1 1 500px", minWidth: 0 }}>
-        <Paper sx={{ p: 3, borderRadius: 3, minHeight: 600, height: "100%" }}>
+      <Box
+        sx={{
+          flex: 1,
+          minWidth: 0,
+          width: "100%",
+        }}
+      >
+        <Paper sx={{ p: 3, borderRadius: 3, minHeight: {xs: "auto", md: 600,}, height: "100%" }}>
 
           <Box sx={{ display: "flex", justifyContent: "space-between", alignItems: "center", mb: 2 }}>
             <Typography variant="h5" sx={{ fontWeight: 600, fontFamily: "'Playfair Display', serif" }}>
@@ -341,7 +361,20 @@ export default function Tasks() {
       </Box>
 
       {/* ── RIGHT: Sidebar ── */}
-      <Box sx={{ flex: "0 0 360px", display: "flex", flexDirection: "column", gap: 3 }}>
+      <Box
+        sx={{
+          width: {
+            xs: "100%",
+            lg: 360,
+          },
+
+          flexShrink: 0,
+
+          display: "flex",
+          flexDirection: "column",
+          gap: 3,
+        }}
+      >
 
         <Paper sx={{ p: 3, borderRadius: 3, minHeight: 280 }}>
           <Typography variant="h6" fontWeight={600} mb={2} sx={{ fontFamily: "'Playfair Display', serif" }}>
@@ -384,7 +417,7 @@ export default function Tasks() {
               { label: "Completed", value: completed, icon: "✅", color: "success.main" },
               { label: "Overdue",   value: overdue,   icon: "⚠️", color: "error.main" },
             ].map(stat => (
-              <Grid item xs={6} key={stat.label}>
+              <Grid item xs={6} sm={3} lg={6} key={stat.label}>
                 <Paper variant="outlined" sx={{ p: 1.5, borderRadius: 2, textAlign: "center" }}>
                   <Typography fontSize={20}>{stat.icon}</Typography>
                   <Typography variant="h6" fontWeight={600} color={stat.color}>{stat.value}</Typography>
