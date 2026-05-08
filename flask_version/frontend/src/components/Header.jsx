@@ -33,23 +33,7 @@ export default function Header() {
   return (
     <AppBar position="static" elevation={0}
       sx={{ borderBottom: "1px solid", borderColor: "divider", bgcolor: headerBg, color: headerText }}>
-      <Toolbar
-        sx={{
-          display: "flex",
-          justifyContent: "space-between",
-          gap: 2,
-
-          flexWrap: {
-            xs: "wrap",
-            md: "nowrap",
-          },
-
-          py: {
-            xs: 1,
-            md: 0,
-          },
-        }}
-      >
+      <Toolbar sx={{ display: "flex", justifyContent: "space-between" }}>
 
         {/* Logo */}
         <Typography
@@ -61,14 +45,7 @@ export default function Header() {
         </Typography>
 
         {/* Nav */}
-        <Box
-          sx={{
-            display: "flex",
-            gap: 1,
-            flexWrap: "wrap",
-            justifyContent: "center",
-          }}
-        >
+        <Box sx={{ display: "flex", gap: 1 }}>
           {navItems.map((item) => {
             const isActive = location.pathname === item.path;
             return (
@@ -78,19 +55,15 @@ export default function Header() {
                 to={item.path}
                 sx={{
                   borderRadius: 50,
-                  px: 2,
+                  px: 2.5, py: 0.6,
                   fontWeight: isActive ? 600 : 400,
-                  position: "relative",
-                  "&::after": isActive ? {
-                    content: '"✦"',
-                    position: "absolute",
-                    top: 2, left: "50%",
-                    transform: "translateX(-50%)",
-                    fontSize: 8,
-                    color: "primary.main",
-                  } : {},
+                  color: isActive ? "primary.contrastText" : "inherit",
+                  bgcolor: isActive ? "primary.main" : "transparent",
+                  "&:hover": {
+                    bgcolor: isActive ? "primary.dark" : "rgba(0,0,0,0.06)",
+                  },
+                  transition: "all 0.2s",
                 }}
-                color={isActive ? "primary" : "inherit"}
               >
                 {item.label}
               </Button>

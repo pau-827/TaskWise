@@ -10,28 +10,24 @@ export default function AppShell() {
   const bgColor = THEMES[themeName]?.palette?.background?.default ?? "#f0f7f5";
 
   return (
-    <Box sx={{ minHeight: "100vh", bgcolor: bgColor, transition: "background 0.4s ease" }}>
+    <Box sx={{
+      minHeight: "100vh",
+      minWidth: 900,
+      bgcolor: bgColor,
+      transition: "background 0.4s ease",
+      overflowX: "auto",
+    }}>
       <Header />
-      <Box
-        sx={{
-          width: "100%",
-          maxWidth: "100%",
-
-          px: {
-            xs: 1.5,
-            sm: 2,
-            md: 3,
-          },
-
-          py: 3,
-
-          flexGrow: 1,
-
-          overflowX: "hidden",
-        }}
-      >
+      <Box sx={{
+        width: "100%",
+        px: 3,
+        py: 3,
+        flexGrow: 1,
+        boxSizing: "border-box",
+      }}>
         <Outlet />
       </Box>
     </Box>
   );
 }
+

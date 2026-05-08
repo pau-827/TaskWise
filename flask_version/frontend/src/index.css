@@ -4,25 +4,17 @@
   padding: 0;
 }
 
-html,
-body {
-  width: 100%;
-  min-height: 100%;
-  overflow-x: hidden;
-
-  -webkit-font-smoothing: antialiased;
-  -moz-osx-font-smoothing: grayscale;
-}
-
 body {
   margin: 0;
+  min-width: 960px;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
 }
 
 #root {
   width: 100%;
   min-height: 100vh;
-  overflow-x: hidden;
-
+  min-width: 960px;
   display: flex;
   flex-direction: column;
 }
