@@ -15,10 +15,19 @@ export default function AppShell() {
       <Box
         sx={{
           width: "100%",
-          px: { xs: 1.5, sm: 2, md: 3 },
+          maxWidth: "100%",
+
+          px: {
+            xs: 1.5,
+            sm: 2,
+            md: 3,
+          },
+
           py: 3,
+
           flexGrow: 1,
-          overflowX: "auto",
+
+          overflowX: "hidden",
         }}
       >
         <Outlet />

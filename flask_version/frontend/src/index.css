@@ -7,8 +7,9 @@
 html,
 body {
   width: 100%;
-  min-width: 760px; /* prevents UI collapse */
-  overflow-x: auto;
+  min-height: 100%;
+  overflow-x: hidden;
+
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
 }
@@ -20,6 +21,8 @@ body {
 #root {
   width: 100%;
   min-height: 100vh;
+  overflow-x: hidden;
+
   display: flex;
   flex-direction: column;
 }
