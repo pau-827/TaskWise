@@ -46,8 +46,8 @@ function App() {
           <Route path="/tasks" element={<Tasks />} />
           <Route path="/journal" element={<Journal />} />
           <Route path="/calendar" element={<Calendar />} />
-          <Route path="/settings" element={<Settings />} />
           <Route path="/recipes" element={<Recipes />} />
+          <Route path="/settings" element={<Settings />} />
         </Route>
 
         {/* Fallback */}
