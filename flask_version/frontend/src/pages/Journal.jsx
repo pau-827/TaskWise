@@ -142,11 +142,14 @@ export default function Journal() {
   }) : "";
 
   return (
-    <Box sx={{ width: "100%", display: "flex", gap: 3, alignItems: "stretch" }}>
+    <Box sx={{
+      width: "100%", display: "flex", gap: 3,
+      height: "calc(100vh - 88px)",
+    }}>
 
       {/* ── LEFT: Entry List ─────────────────────────────────────────────── */}
-      <Box sx={{ flex: "0 0 320px", display: "flex", flexDirection: "column" }}>
-        <Paper sx={{ p: 2.5, borderRadius: 3, bgcolor: bgPaper, height: "100%", display: "flex", flexDirection: "column" }}>
+      <Box sx={{ flex: "0 0 320px", display: "flex", flexDirection: "column", minHeight: 0 }}>
+        <Paper sx={{ p: 2.5, borderRadius: 3, bgcolor: bgPaper, flex: 1, display: "flex", flexDirection: "column", minHeight: 0 }}>
 
           {/* Header */}
           <Box sx={{ display: "flex", justifyContent: "space-between", alignItems: "center", mb: 2 }}>
@@ -237,123 +240,128 @@ export default function Journal() {
       </Box>
 
       {/* ── RIGHT: Editor ───────────────────────────────────────────────── */}
-      <Box sx={{ flex: "1 1 0", minWidth: 0 }}>
-        {!selected ? (
-          <Paper sx={{ p: 4, borderRadius: 3, bgcolor: bgPaper, height: "100%",
-            display: "flex", alignItems: "center", justifyContent: "center" }}>
-            <Box sx={{ textAlign: "center", color: textMuted }}>
-              <Typography fontSize={52} mb={2}>📝</Typography>
-              <Typography variant="h6" fontWeight={500} color={textMain}>Select an entry to edit</Typography>
-              <Typography variant="body2" mt={1}>Or create a new one using the button on the left.</Typography>
-            </Box>
-          </Paper>
-        ) : (
-          <Paper sx={{ p: 3, borderRadius: 3, bgcolor: bgPaper, height: "100%",
-            display: "flex", flexDirection: "column", gap: 2 }}>
+      <Box sx={{ flex: "1 1 0", minWidth: 0, display: "flex", flexDirection: "column", minHeight: 0 }}>
+        <Paper sx={{ p: 3, borderRadius: 3, bgcolor: bgPaper, flex: 1, display: "flex", flexDirection: "column", gap: 2, minHeight: 0 }}>
 
-            {/* Title + delete */}
-            <Box sx={{ display: "flex", alignItems: "center", gap: 1 }}>
-              <TextField
-                fullWidth variant="outlined" placeholder="Entry title..."
-                value={title} onChange={e => setTitle(e.target.value)}
-                sx={{ "& .MuiOutlinedInput-root": { borderRadius: 2, fontSize: 18, fontWeight: 600 } }}
-              />
+          {/* Title + delete */}
+          <Box sx={{ display: "flex", alignItems: "center", gap: 1 }}>
+            <TextField
+              fullWidth variant="outlined"
+              placeholder={selected ? "Entry title..." : "Select or create an entry to start writing..."}
+              value={title} onChange={e => setTitle(e.target.value)}
+              disabled={!selected}
+              sx={{ "& .MuiOutlinedInput-root": { borderRadius: 2, fontSize: 18, fontWeight: 600 } }}
+            />
+            {selected && (
               <Tooltip title="Delete entry">
                 <IconButton color="error" onClick={() => deleteEntry(selected.id)}>
                   <DeleteIcon />
                 </IconButton>
               </Tooltip>
-            </Box>
-
-            {/* Mood selector */}
-            <Box>
-              <Box sx={{ display: "flex", justifyContent: "space-between", alignItems: "center", mb: 1 }}>
-                <Typography variant="caption" fontWeight={600} color={textMuted} letterSpacing={1}
-                  textTransform="uppercase">
-                  Mood
-                </Typography>
-                <Typography variant="caption" color={textMuted} fontStyle="italic">
-                  AI will suggest a mood when you Reflect
-                </Typography>
-              </Box>
-              <Box sx={{ display: "flex", gap: 1, flexWrap: "wrap" }}>
-                {MOODS.map(m => (
-                  <Chip
-                    key={m.label}
-                    label={`${m.emoji} ${m.label}`}
-                    onClick={() => setMood(mood === m.label ? "" : m.label)}
-                    sx={{
-                      borderRadius: 50, cursor: "pointer", fontWeight: mood === m.label ? 700 : 400,
-                      bgcolor: mood === m.label ? primary : rowBg,
-                      color: mood === m.label ? "#fff" : textMain,
-                      border: `1px solid ${mood === m.label ? primary : borderCol}`,
-                      transition: "all 0.2s",
-                      "&:hover": { bgcolor: mood === m.label ? primary : primary + "22" },
-                    }}
-                  />
-                ))}
-              </Box>
-            </Box>
-
-            <Box sx={{ borderTop: `1px solid ${borderCol}` }} />
-
-            {/* Content */}
-            <TextField
-              fullWidth multiline
-              placeholder="Write your thoughts here..."
-              value={content} onChange={e => setContent(e.target.value)}
-              sx={{
-                flexGrow: 1,
-                "& .MuiOutlinedInput-root": { borderRadius: 2, alignItems: "flex-start", height: "100%" },
-                "& textarea": { height: "100% !important" },
-              }}
-              InputProps={{ sx: { height: "100%", alignItems: "flex-start" } }}
-            />
-
-            {/* AI Reflection */}
-            {aiText && (
-              <Box sx={{
-                p: 2, borderRadius: 2.5, bgcolor: primary + "11",
-                border: `1px solid ${primary}33`,
-              }}>
-                <Box sx={{ display: "flex", alignItems: "center", gap: 0.8, mb: 0.8 }}>
-                  <AutoAwesomeIcon sx={{ fontSize: 16, color: primary }} />
-                  <Typography variant="caption" fontWeight={700} color={primary}>AI Reflection</Typography>
-                </Box>
-                <Typography variant="body2" color={textMuted} fontStyle="italic" lineHeight={1.7}>
-                  {aiText}
-                </Typography>
-              </Box>
             )}
+          </Box>
 
-            {/* Footer */}
-            <Box sx={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
-              <Box>
-                <Typography variant="caption" color={textMuted} display="block">
-                  Created  {fmt(selected.created_at)}
-                </Typography>
-                <Typography variant="caption" color={textMuted} display="block">
-                  Last saved  {fmt(selected.updated_at)}
-                </Typography>
-              </Box>
-              <Box sx={{ display: "flex", gap: 1 }}>
-                <Button
-                  variant="outlined" startIcon={<AutoAwesomeIcon />}
-                  onClick={handleReflect} disabled={reflecting}
-                  sx={{ borderRadius: 50, px: 2.5 }}>
-                  {reflecting ? "Reflecting..." : "Reflect"}
-                </Button>
-                <Button
-                  variant="contained" startIcon={<SaveIcon />}
-                  onClick={saveEntry} disabled={saving}
-                  sx={{ borderRadius: 50, px: 2.5 }}>
-                  {saving ? "Saving..." : "Save"}
-                </Button>
-              </Box>
+          {/* Mood selector */}
+          <Box>
+            <Box sx={{ display: "flex", justifyContent: "space-between", alignItems: "center", mb: 1 }}>
+              <Typography variant="caption" fontWeight={600} color={textMuted} letterSpacing={1}
+                textTransform="uppercase">
+                Mood
+              </Typography>
+              <Typography variant="caption" color={textMuted} fontStyle="italic">
+                AI will suggest a mood when you Reflect
+              </Typography>
             </Box>
-          </Paper>
-        )}
+            <Box sx={{ display: "flex", gap: 1, flexWrap: "wrap" }}>
+              {MOODS.map(m => (
+                <Chip
+                  key={m.label}
+                  label={`${m.emoji} ${m.label}`}
+                  onClick={() => selected && setMood(mood === m.label ? "" : m.label)}
+                  sx={{
+                    borderRadius: 50, cursor: selected ? "pointer" : "default",
+                    fontWeight: mood === m.label ? 700 : 400,
+                    bgcolor: mood === m.label ? primary : rowBg,
+                    color: mood === m.label ? "#fff" : textMain,
+                    border: `1px solid ${mood === m.label ? primary : borderCol}`,
+                    transition: "all 0.2s",
+                    opacity: selected ? 1 : 0.5,
+                    "&:hover": selected ? { bgcolor: mood === m.label ? primary : primary + "22" } : {},
+                  }}
+                />
+              ))}
+            </Box>
+          </Box>
+
+          <Box sx={{ borderTop: `1px solid ${borderCol}` }} />
+
+          {/* Content */}
+          <TextField
+            fullWidth multiline
+            placeholder={selected ? "Write your thoughts here..." : "Create or select an entry to begin writing..."}
+            value={content} onChange={e => setContent(e.target.value)}
+            disabled={!selected}
+            sx={{
+              flex: 1,
+              "& .MuiOutlinedInput-root": { borderRadius: 2, height: "100%", alignItems: "flex-start" },
+              "& textarea": { height: "100% !important" },
+            }}
+            InputProps={{ sx: { height: "100%", alignItems: "flex-start" } }}
+          />
+
+          {/* AI Reflection */}
+          {aiText && (
+            <Box sx={{
+              p: 2, borderRadius: 2.5, bgcolor: primary + "11",
+              border: `1px solid ${primary}33`,
+            }}>
+              <Box sx={{ display: "flex", alignItems: "center", gap: 0.8, mb: 0.8 }}>
+                <AutoAwesomeIcon sx={{ fontSize: 16, color: primary }} />
+                <Typography variant="caption" fontWeight={700} color={primary}>AI Reflection</Typography>
+              </Box>
+              <Typography variant="body2" color={textMuted} fontStyle="italic" lineHeight={1.7}>
+                {aiText}
+              </Typography>
+            </Box>
+          )}
+
+          {/* Footer */}
+          <Box sx={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+            <Box>
+              {selected ? (
+                <>
+                  <Typography variant="caption" color={textMuted} display="block">
+                    Created  {fmt(selected.created_at)}
+                  </Typography>
+                  <Typography variant="caption" color={textMuted} display="block">
+                    Last saved  {fmt(selected.updated_at)}
+                  </Typography>
+                </>
+              ) : (
+                <Typography variant="caption" color={textMuted} fontStyle="italic">
+                  No entry selected
+                </Typography>
+              )}
+            </Box>
+            <Box sx={{ display: "flex", gap: 1 }}>
+              <Button
+                variant="outlined" startIcon={<AutoAwesomeIcon />}
+                onClick={handleReflect} disabled={reflecting || !selected}
+                sx={{ borderRadius: 50, px: 2.5 }}>
+                {reflecting ? "Reflecting..." : "Reflect"}
+              </Button>
+              <Button
+                variant="contained" startIcon={<SaveIcon />}
+                onClick={saveEntry} disabled={saving || !selected}
+                sx={{ borderRadius: 50, px: 2.5 }}>
+                {saving ? "Saving..." : "Save"}
+              </Button>
+            </Box>
+          </Box>
+        </Paper>
       </Box>
+
+
 
       <Snackbar open={snack.open} autoHideDuration={3000}
         onClose={() => setSnack(s => ({ ...s, open: false }))}
