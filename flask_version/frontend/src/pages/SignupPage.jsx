@@ -7,6 +7,7 @@ import { supabase } from "../services/supabase";
 const CLASSROOM_SCOPES = [
   "https://www.googleapis.com/auth/classroom.courses.readonly",
   "https://www.googleapis.com/auth/classroom.coursework.me.readonly",
+  "https://www.googleapis.com/auth/calendar.readonly",
 ].join(" ");
 
 const GoogleIcon = () => (
