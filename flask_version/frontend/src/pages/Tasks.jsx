@@ -15,6 +15,7 @@ import EditIcon from "@mui/icons-material/Edit";
 import DeleteIcon from "@mui/icons-material/Delete";
 import CheckCircleIcon from "@mui/icons-material/CheckCircle";
 import PictureAsPdfIcon from "@mui/icons-material/PictureAsPdf";
+import SyncIcon from "@mui/icons-material/Sync";
 import RadioButtonUncheckedIcon from "@mui/icons-material/RadioButtonUnchecked";
 import SortIcon from "@mui/icons-material/Sort";
 import CalendarTodayIcon from "@mui/icons-material/CalendarToday";
@@ -144,6 +145,57 @@ export default function Tasks() {
   const [snack, setSnack]                   = useState({ open: false, msg: "", severity: "success" });
   const [printOpen, setPrintOpen]           = useState(false);
   const [printScope, setPrintScope]         = useState("current");
+  const [syncing, setSyncing]               = useState(false);
+
+  const handleClassroomSync = async () => {
+    setSyncing(true);
+    try {
+      const { data: { session } } = await supabase.auth.getSession();
+      const access_token = session?.provider_token;
+      const user_jwt     = session?.access_token;
+
+      if (!access_token) {
+        showSnack("No Google access token found. Please log in with Google first.", "error");
+        setSyncing(false);
+        return;
+      }
+
+      const res  = await fetch("http://localhost:5000/api/classroom/sync", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ access_token, user_id: user.id, user_jwt }),
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || "Sync failed");
+      showSnack(data.message, "success");
+      fetchTasks();
+    } catch (err) {
+      showSnack(err.message, "error");
+    }
+    setSyncing(false);
+  };
+
+  const handleClassroomUnsync = async () => {
+    if (!window.confirm("This will remove all tasks synced from Google Classroom. Continue?")) return;
+    setSyncing(true);
+    try {
+      const { data: { session } } = await supabase.auth.getSession();
+      const user_jwt = session?.access_token;
+
+      const res  = await fetch("http://localhost:5000/api/classroom/unsync", {
+        method: "DELETE",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ user_id: user.id, user_jwt }),
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || "Unsync failed");
+      showSnack(data.message, "success");
+      fetchTasks();
+    } catch (err) {
+      showSnack(err.message, "error");
+    }
+    setSyncing(false);
+  };
 
   const handlePrint = () => {
     const tasksToPrint = printScope === "all" ? tasks : filtered;
@@ -321,9 +373,24 @@ export default function Tasks() {
               Tasks
             </Typography>
             <Box sx={{ display: "flex", gap: 1 }}>
+              <Tooltip title="Sync Google Classroom">
+                <IconButton onClick={handleClassroomSync} disabled={syncing}
+                  sx={{ border: "1px solid", borderColor: "divider", borderRadius: 2 }}>
+                  <SyncIcon fontSize="small" sx={{
+                    animation: syncing ? "spin 1s linear infinite" : "none",
+                    "@keyframes spin": { "100%": { transform: "rotate(360deg)" } },
+                  }} />
+                </IconButton>
+              </Tooltip>
+              <Tooltip title="Unsync Classroom tasks">
+                <IconButton onClick={handleClassroomUnsync} disabled={syncing}
+                  sx={{ border: "1px solid", borderColor: "error.light", borderRadius: 2, color: "error.main",
+                    "&:hover": { bgcolor: "error.light", color: "#fff" } }}>
+                  <SyncIcon fontSize="small" sx={{ transform: "scaleX(-1)" }} />
+                </IconButton>
+              </Tooltip>
               <Tooltip title="Export as PDF">
-                <IconButton
-                  onClick={() => setPrintOpen(true)}
+                <IconButton onClick={() => setPrintOpen(true)}
                   sx={{ border: "1px solid", borderColor: "divider", borderRadius: 2 }}>
                   <PictureAsPdfIcon fontSize="small" />
                 </IconButton>
@@ -413,6 +480,10 @@ export default function Tasks() {
                             {task.title}
                           </Typography>
                           <Chip label={task.category} size="small" sx={{ borderRadius: 50, fontSize: 11, height: 20 }} />
+                          {task.synced_from === "classroom" && (
+                            <Chip label="📚 Classroom" size="small"
+                              sx={{ borderRadius: 50, fontSize: 11, height: 20, bgcolor: "#4285F422", color: "#4285F4", fontWeight: 600 }} />
+                          )}
                           <Box sx={{ width: 8, height: 8, borderRadius: "50%", bgcolor: PRIORITY_COLOR[task.priority] || "#999", flexShrink: 0 }} />
                           {over && <Chip label="Overdue" size="small" color="error" sx={{ borderRadius: 50, fontSize: 11, height: 20 }} />}
                         </Box>
