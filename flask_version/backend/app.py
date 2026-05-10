@@ -3,12 +3,14 @@ from flask_cors import CORS
 
 from routes.task_routes import task_routes
 from routes.classroom_routes import classroom_routes
+from routes.calendar_routes import calendar_routes
 
 app = Flask(__name__)
 CORS(app)
 
-app.register_blueprint(task_routes,    url_prefix="/api")
+app.register_blueprint(task_routes,     url_prefix="/api")
 app.register_blueprint(classroom_routes, url_prefix="/api")
+app.register_blueprint(calendar_routes,  url_prefix="/api")
 
 @app.route("/")
 def home():

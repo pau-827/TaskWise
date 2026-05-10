@@ -181,7 +181,6 @@ export default function Tasks() {
     try {
       const { data: { session } } = await supabase.auth.getSession();
       const user_jwt = session?.access_token;
-
       const res  = await fetch("http://localhost:5000/api/classroom/unsync", {
         method: "DELETE",
         headers: { "Content-Type": "application/json" },
@@ -384,8 +383,7 @@ export default function Tasks() {
               </Tooltip>
               <Tooltip title="Unsync Classroom tasks">
                 <IconButton onClick={handleClassroomUnsync} disabled={syncing}
-                  sx={{ border: "1px solid", borderColor: "error.light", borderRadius: 2, color: "error.main",
-                    "&:hover": { bgcolor: "error.light", color: "#fff" } }}>
+                  sx={{ border: "1px solid", borderColor: "error.light", borderRadius: 2, color: "error.main", "&:hover": { bgcolor: "error.light", color: "#fff" } }}>
                   <SyncIcon fontSize="small" sx={{ transform: "scaleX(-1)" }} />
                 </IconButton>
               </Tooltip>
