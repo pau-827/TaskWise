@@ -22,86 +22,163 @@ import CalendarTodayIcon from "@mui/icons-material/CalendarToday";
 import { PieChart, Pie, Cell, Tooltip as ReTooltip, ResponsiveContainer, Legend } from "recharts";
 import { supabase } from "../services/supabase";
 import { AppContext } from "../context/AppContext";
+import dayjs from "dayjs";
+import { LocalizationProvider } from "@mui/x-date-pickers/LocalizationProvider";
+import { AdapterDayjs } from "@mui/x-date-pickers/AdapterDayjs";
+import { DateTimePicker } from "@mui/x-date-pickers/DateTimePicker";
+
 
 const CATEGORIES = ["All Tasks", "Personal", "Work", "Study", "Bills", "Others"];
 const PRIORITIES = ["low", "medium", "high"];
 
 const PRIORITY_COLOR = {
-  low:    "#4a9b82",
+  low: "#4a9b82",
   medium: "#f4a261",
-  high:   "#e53935",
+  high: "#e53935",
 };
+
+function toDateTimeLocalValue(value) {
+  if (!value) return "";
+  const date = new Date(value);
+  const offset = date.getTimezoneOffset();
+  const localDate = new Date(date.getTime() - offset * 60000);
+  return localDate.toISOString().slice(0, 16);
+}
+
+function localInputToISO(value) {
+  if (!value) return null;
+  return new Date(value).toISOString();
+}
+
+function formatTaskDate(value) {
+  if (!value) return "";
+  return new Date(value).toLocaleString([], {
+    year: "numeric",
+    month: "short",
+    day: "numeric",
+    hour: "numeric",
+    minute: "2-digit",
+  });
+}
 
 function isOverdue(task) {
   if (!task.due_date || task.status === "completed") return false;
   return new Date(task.due_date) < new Date();
 }
 
-// ── Task Modal ─────────────────────────────────────────────────────────────
 function TaskModal({ open, onClose, onSave, editTask }) {
-  const emptyForm = { title: "", description: "", category: "Personal", priority: "medium", due_date: "", reminder_at: "" };
+  const emptyForm = {
+    title: "",
+    description: "",
+    category: "Personal",
+    priority: "medium",
+    due_date: "",
+    reminder_at: "",
+  };
+
   const [form, setForm] = useState(emptyForm);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
 
   useEffect(() => {
     if (!open) return;
+
     if (editTask) {
       setForm({
-        title:       editTask.title || "",
+        title: editTask.title || "",
         description: editTask.description || "",
-        category:    editTask.category || "Personal",
-        priority:    editTask.priority || "medium",
-        due_date:    editTask.due_date ? editTask.due_date.slice(0, 16) : "",
-        reminder_at: editTask.reminder_at ? editTask.reminder_at.slice(0, 16) : "",
+        category: editTask.category || "Personal",
+        priority: editTask.priority || "medium",
+        due_date: toDateTimeLocalValue(editTask.due_date),
+        reminder_at: toDateTimeLocalValue(editTask.reminder_at),
       });
     } else {
       setForm(emptyForm);
     }
+
     setError("");
-  // eslint-disable-next-line react-hooks/exhaustive-deps
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [open]);
 
   const handleSave = async () => {
-    if (!form.title.trim()) { setError("Title is required."); return; }
+    if (!form.title.trim()) {
+      setError("Title is required.");
+      return;
+    }
+
     setLoading(true);
     await onSave(form);
     setLoading(false);
     onClose();
   };
 
-  const inputStyle = { "& .MuiOutlinedInput-root": { borderRadius: 2 } };
+  const inputStyle = {
+    "& .MuiOutlinedInput-root": {
+      borderRadius: 2,
+    },
+  };
 
   return (
-    <Dialog open={open} onClose={onClose} maxWidth="sm" fullWidth
-      PaperProps={{ sx: { borderRadius: 3 } }}>
+    <Dialog
+      open={open}
+      onClose={onClose}
+      maxWidth="sm"
+      fullWidth
+      PaperProps={{ sx: { borderRadius: 3 } }}
+    >
       <DialogTitle sx={{ fontWeight: 600, fontFamily: "'Playfair Display', serif" }}>
         {editTask ? "Edit Task" : "New Task"}
       </DialogTitle>
+
       <DialogContent sx={{ display: "flex", flexDirection: "column", gap: 2, pt: "12px !important" }}>
         {error && <Alert severity="error" sx={{ borderRadius: 2 }}>{error}</Alert>}
-        <TextField label="Title" fullWidth required value={form.title}
-          onChange={e => setForm({ ...form, title: e.target.value })} sx={inputStyle} />
-        <TextField label="Description" fullWidth multiline rows={3} value={form.description}
-          onChange={e => setForm({ ...form, description: e.target.value })} sx={inputStyle} />
+
+        <TextField
+          label="Title"
+          fullWidth
+          required
+          value={form.title}
+          onChange={(e) => setForm({ ...form, title: e.target.value })}
+          sx={inputStyle}
+        />
+
+        <TextField
+          label="Description"
+          fullWidth
+          multiline
+          rows={3}
+          value={form.description}
+          onChange={(e) => setForm({ ...form, description: e.target.value })}
+          sx={inputStyle}
+        />
+
         <Grid container spacing={2}>
           <Grid item xs={6}>
             <FormControl fullWidth>
               <InputLabel>Category</InputLabel>
-              <Select value={form.category} label="Category"
-                onChange={e => setForm({ ...form, category: e.target.value })} sx={{ borderRadius: 2 }}>
-                {CATEGORIES.filter(c => c !== "All Tasks").map(c => (
+              <Select
+                value={form.category}
+                label="Category"
+                onChange={(e) => setForm({ ...form, category: e.target.value })}
+                sx={{ borderRadius: 2 }}
+              >
+                {CATEGORIES.filter((c) => c !== "All Tasks").map((c) => (
                   <MenuItem key={c} value={c}>{c}</MenuItem>
                 ))}
               </Select>
             </FormControl>
           </Grid>
+
           <Grid item xs={6}>
             <FormControl fullWidth>
               <InputLabel>Priority</InputLabel>
-              <Select value={form.priority} label="Priority"
-                onChange={e => setForm({ ...form, priority: e.target.value })} sx={{ borderRadius: 2 }}>
-                {PRIORITIES.map(p => (
+              <Select
+                value={form.priority}
+                label="Priority"
+                onChange={(e) => setForm({ ...form, priority: e.target.value })}
+                sx={{ borderRadius: 2 }}
+              >
+                {PRIORITIES.map((p) => (
                   <MenuItem key={p} value={p}>
                     <Box sx={{ display: "flex", alignItems: "center", gap: 1 }}>
                       <Box sx={{ width: 8, height: 8, borderRadius: "50%", bgcolor: PRIORITY_COLOR[p] }} />
@@ -113,14 +190,75 @@ function TaskModal({ open, onClose, onSave, editTask }) {
             </FormControl>
           </Grid>
         </Grid>
-        <TextField label="Due Date" type="datetime-local" fullWidth InputLabelProps={{ shrink: true }}
-          value={form.due_date} onChange={e => setForm({ ...form, due_date: e.target.value })} sx={inputStyle} />
-        <TextField label="Reminder" type="datetime-local" fullWidth InputLabelProps={{ shrink: true }}
-          value={form.reminder_at} onChange={e => setForm({ ...form, reminder_at: e.target.value })} sx={inputStyle} />
+
+<LocalizationProvider dateAdapter={AdapterDayjs}>
+  <Grid container spacing={2}>
+    <Grid item xs={12} md={6}>
+      <DateTimePicker
+        label="Due Date & Time"
+        value={form.due_date ? dayjs(form.due_date) : null}
+        onChange={(newValue) =>
+          setForm({
+            ...form,
+            due_date: newValue
+              ? newValue.format("YYYY-MM-DDTHH:mm")
+              : "",
+          })
+        }
+        slotProps={{
+          textField: {
+            fullWidth: true,
+            helperText: "Select the task deadline",
+            sx: {
+              "& .MuiOutlinedInput-root": {
+                borderRadius: 3,
+              },
+            },
+          },
+        }}
+      />
+    </Grid>
+
+    <Grid item xs={12} md={6}>
+      <DateTimePicker
+        label="Reminder Time"
+        value={form.reminder_at ? dayjs(form.reminder_at) : null}
+        onChange={(newValue) =>
+          setForm({
+            ...form,
+            reminder_at: newValue
+              ? newValue.format("YYYY-MM-DDTHH:mm")
+              : "",
+          })
+        }
+        slotProps={{
+          textField: {
+            fullWidth: true,
+            helperText: "Optional reminder before the deadline",
+            sx: {
+              "& .MuiOutlinedInput-root": {
+                borderRadius: 3,
+              },
+            },
+          },
+        }}
+      />
+    </Grid>
+  </Grid>
+</LocalizationProvider>
       </DialogContent>
+
       <DialogActions sx={{ px: 3, pb: 3, gap: 1 }}>
-        <Button onClick={onClose} sx={{ borderRadius: 50 }}>Cancel</Button>
-        <Button onClick={handleSave} variant="contained" disabled={loading} sx={{ borderRadius: 50, px: 3 }}>
+        <Button onClick={onClose} sx={{ borderRadius: 50 }}>
+          Cancel
+        </Button>
+
+        <Button
+          onClick={handleSave}
+          variant="contained"
+          disabled={loading}
+          sx={{ borderRadius: 50, px: 3 }}
+        >
           {loading ? "Saving..." : editTask ? "Save Changes" : "Add Task"}
         </Button>
       </DialogActions>
@@ -128,31 +266,62 @@ function TaskModal({ open, onClose, onSave, editTask }) {
   );
 }
 
-// ── Main Tasks Page ────────────────────────────────────────────────────────
 export default function Tasks() {
   const { user } = useContext(AppContext);
   const { themeName } = useContext(ThemeContext);
-  const CHART_COLORS = THEMES[themeName]?.custom?.chartColors ?? ["#4a9b82","#f4a261","#2a9d8f","#e76f51","#a855f7"];
 
-  const [tasks, setTasks]                   = useState([]);
-  const [loading, setLoading]               = useState(true);
+  const CHART_COLORS =
+    THEMES[themeName]?.custom?.chartColors ??
+    ["#4a9b82", "#f4a261", "#2a9d8f", "#e76f51", "#a855f7"];
+
+  const [tasks, setTasks] = useState([]);
+  const [loading, setLoading] = useState(true);
   const [activeCategory, setActiveCategory] = useState("All Tasks");
-  const [search, setSearch]                 = useState("");
-  const [sortAnchor, setSortAnchor]         = useState(null);
-  const [sortBy, setSortBy]                 = useState("created_at");
-  const [modalOpen, setModalOpen]           = useState(false);
-  const [editTask, setEditTask]             = useState(null);
-  const [snack, setSnack]                   = useState({ open: false, msg: "", severity: "success" });
-  const [printOpen, setPrintOpen]           = useState(false);
-  const [printScope, setPrintScope]         = useState("current");
-  const [syncing, setSyncing]               = useState(false);
+  const [search, setSearch] = useState("");
+  const [sortAnchor, setSortAnchor] = useState(null);
+  const [sortBy, setSortBy] = useState("created_at");
+  const [modalOpen, setModalOpen] = useState(false);
+  const [editTask, setEditTask] = useState(null);
+  const [snack, setSnack] = useState({ open: false, msg: "", severity: "success" });
+  const [printOpen, setPrintOpen] = useState(false);
+  const [printScope, setPrintScope] = useState("current");
+  const [syncing, setSyncing] = useState(false);
+
+  const showSnack = (msg, severity = "success") => {
+    setSnack({ open: true, msg, severity });
+  };
+
+  const fetchTasks = useCallback(async () => {
+    if (!user?.id) return;
+
+    setLoading(true);
+
+    const { data, error } = await supabase
+      .from("tasks")
+      .select("*")
+      .eq("user_id", user.id)
+      .order(sortBy, { ascending: sortBy === "title" });
+
+    if (!error) {
+      setTasks(data || []);
+    } else {
+      showSnack(error.message, "error");
+    }
+
+    setLoading(false);
+  }, [user, sortBy]);
+
+  useEffect(() => {
+    if (user) fetchTasks();
+  }, [fetchTasks, user]);
 
   const handleClassroomSync = async () => {
     setSyncing(true);
+
     try {
       const { data: { session } } = await supabase.auth.getSession();
       const access_token = session?.provider_token;
-      const user_jwt     = session?.access_token;
+      const user_jwt = session?.access_token;
 
       if (!access_token) {
         showSnack("No Google access token found. Please log in with Google first.", "error");
@@ -160,59 +329,167 @@ export default function Tasks() {
         return;
       }
 
-      const res  = await fetch("http://localhost:5000/api/classroom/sync", {
+      const res = await fetch("http://localhost:5000/api/classroom/sync", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ access_token, user_id: user.id, user_jwt }),
       });
+
       const data = await res.json();
+
       if (!res.ok) throw new Error(data.error || "Sync failed");
+
       showSnack(data.message, "success");
       fetchTasks();
     } catch (err) {
       showSnack(err.message, "error");
     }
+
     setSyncing(false);
   };
 
   const handleClassroomUnsync = async () => {
     if (!window.confirm("This will remove all tasks synced from Google Classroom. Continue?")) return;
+
     setSyncing(true);
+
     try {
       const { data: { session } } = await supabase.auth.getSession();
       const user_jwt = session?.access_token;
-      const res  = await fetch("http://localhost:5000/api/classroom/unsync", {
+
+      const res = await fetch("http://localhost:5000/api/classroom/unsync", {
         method: "DELETE",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ user_id: user.id, user_jwt }),
       });
+
       const data = await res.json();
+
       if (!res.ok) throw new Error(data.error || "Unsync failed");
+
       showSnack(data.message, "success");
       fetchTasks();
     } catch (err) {
       showSnack(err.message, "error");
     }
+
     setSyncing(false);
   };
+
+  const handleSave = async (form) => {
+    const payload = {
+      ...form,
+      user_id: user.id,
+      due_date: localInputToISO(form.due_date),
+      reminder_at: localInputToISO(form.reminder_at),
+      status: editTask?.status || "pending",
+    };
+
+    if (editTask) {
+      const { error } = await supabase
+        .from("tasks")
+        .update(payload)
+        .eq("id", editTask.id);
+
+      if (!error) {
+        showSnack("Task updated!");
+        fetchTasks();
+      } else {
+        showSnack(error.message, "error");
+      }
+    } else {
+      const { error } = await supabase
+        .from("tasks")
+        .insert(payload);
+
+      if (!error) {
+        showSnack("Task added!");
+        fetchTasks();
+      } else {
+        showSnack(error.message, "error");
+      }
+    }
+  };
+
+  const toggleComplete = async (task) => {
+    const newStatus = task.status === "completed" ? "pending" : "completed";
+
+    const { error } = await supabase
+      .from("tasks")
+      .update({ status: newStatus })
+      .eq("id", task.id);
+
+    if (!error) {
+      setTasks((prev) =>
+        prev.map((t) => (t.id === task.id ? { ...t, status: newStatus } : t))
+      );
+
+      showSnack(newStatus === "completed" ? "Task completed!" : "Marked as pending.");
+    } else {
+      showSnack(error.message, "error");
+    }
+  };
+
+  const deleteTask = async (id) => {
+    const { error } = await supabase
+      .from("tasks")
+      .delete()
+      .eq("id", id);
+
+    if (!error) {
+      setTasks((prev) => prev.filter((t) => t.id !== id));
+      showSnack("Task deleted.");
+    } else {
+      showSnack(error.message, "error");
+    }
+  };
+
+  const filtered = tasks.filter((t) => {
+    const matchCat = activeCategory === "All Tasks" || t.category === activeCategory;
+    const matchSearch =
+      t.title.toLowerCase().includes(search.toLowerCase()) ||
+      (t.description || "").toLowerCase().includes(search.toLowerCase());
+
+    return matchCat && matchSearch;
+  });
+
+  const total = tasks.length;
+  const completed = tasks.filter((t) => t.status === "completed").length;
+  const pending = tasks.filter((t) => t.status === "pending").length;
+  const overdue = tasks.filter(isOverdue).length;
+  const progress = total ? Math.round((completed / total) * 100) : 0;
+
+  const categoryData = CATEGORIES
+    .filter((c) => c !== "All Tasks")
+    .map((cat) => ({
+      name: cat,
+      value: tasks.filter((t) => t.category === cat).length,
+    }))
+    .filter((d) => d.value > 0);
 
   const handlePrint = () => {
     const tasksToPrint = printScope === "all" ? tasks : filtered;
     const displayName = user?.user_metadata?.display_name || user?.email?.split("@")[0] || "User";
     const now = new Date().toLocaleString();
-    const totalP     = tasksToPrint.length;
-    const completedP = tasksToPrint.filter(t => t.status === "completed").length;
-    const pendingP   = tasksToPrint.filter(t => t.status === "pending").length;
-    const overdueP   = tasksToPrint.filter(isOverdue).length;
-    const progressP  = totalP ? Math.round((completedP / totalP) * 100) : 0;
 
-    const rows = tasksToPrint.map(t => `
+    const totalP = tasksToPrint.length;
+    const completedP = tasksToPrint.filter((t) => t.status === "completed").length;
+    const pendingP = tasksToPrint.filter((t) => t.status === "pending").length;
+    const overdueP = tasksToPrint.filter(isOverdue).length;
+    const progressP = totalP ? Math.round((completedP / totalP) * 100) : 0;
+
+    const rows = tasksToPrint.map((t) => `
       <tr>
         <td>${t.status === "completed" ? "✅" : isOverdue(t) ? "⚠️" : "🔲"}</td>
-        <td><strong>${t.title}</strong>${t.description ? `<br/><span style="color:#666;font-size:12px">${t.description}</span>` : ""}</td>
+        <td>
+          <strong>${t.title}</strong>
+          ${t.description ? `<br/><span style="color:#666;font-size:12px">${t.description}</span>` : ""}
+        </td>
         <td>${t.category}</td>
-        <td style="color:${t.priority === "high" ? "#e53935" : t.priority === "medium" ? "#f4a261" : "#4a9b82"}">${t.priority}</td>
-        <td>${t.due_date ? new Date(t.due_date).toLocaleString([], { dateStyle: "medium", timeStyle: "short" }) : "—"}</td>
+        <td style="color:${t.priority === "high" ? "#e53935" : t.priority === "medium" ? "#f4a261" : "#4a9b82"}">
+          ${t.priority}
+        </td>
+        <td>${t.due_date ? formatTaskDate(t.due_date) : "—"}</td>
         <td>${t.status}</td>
       </tr>
     `).join("");
@@ -221,7 +498,7 @@ export default function Tasks() {
       <!DOCTYPE html>
       <html>
       <head>
-        <title>TaskWise — Task Report</title>
+        <title>TaskWise Task Report</title>
         <style>
           * { box-sizing: border-box; margin: 0; padding: 0; }
           body { font-family: 'Segoe UI', sans-serif; color: #1a1a2e; padding: 40px; }
@@ -249,7 +526,9 @@ export default function Tasks() {
         <div class="header">
           <div>
             <div class="logo">TaskWise</div>
-            <div style="font-size:13px;color:#666;margin-top:4px">Task Report — ${printScope === "all" ? "All Tasks" : `Filtered: ${activeCategory}`}</div>
+            <div style="font-size:13px;color:#666;margin-top:4px">
+              Task Report - ${printScope === "all" ? "All Tasks" : `Filtered: ${activeCategory}`}
+            </div>
           </div>
           <div class="meta">
             <div>${displayName}</div>
@@ -264,7 +543,7 @@ export default function Tasks() {
           <div class="stat"><div class="stat-value" style="color:#e53935">${overdueP}</div><div class="stat-label">Overdue</div></div>
         </div>
 
-        <div class="progress-label">Overall Progress — ${progressP}%</div>
+        <div class="progress-label">Overall Progress - ${progressP}%</div>
         <div class="progress-bar"><div class="progress-fill"></div></div>
 
         <table>
@@ -290,140 +569,124 @@ export default function Tasks() {
     win.document.write(html);
     win.document.close();
     win.focus();
-    setTimeout(() => { win.print(); }, 500);
+
+    setTimeout(() => {
+      win.print();
+    }, 500);
+
     setPrintOpen(false);
   };
 
-  const fetchTasks = useCallback(async () => {
-    setLoading(true);
-    const { data, error } = await supabase
-      .from("tasks").select("*").eq("user_id", user.id)
-      .order(sortBy, { ascending: sortBy === "title" });
-    if (!error) setTasks(data || []);
-    setLoading(false);
-  }, [user, sortBy]);
-
-  useEffect(() => {
-    if (user) fetchTasks();
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [fetchTasks]);
-
-  const handleSave = async (form) => {
-    const payload = {
-      ...form, user_id: user.id,
-      due_date:    form.due_date    || null,
-      reminder_at: form.reminder_at || null,
-      status:      editTask?.status || "pending",
-    };
-    if (editTask) {
-      const { error } = await supabase.from("tasks").update(payload).eq("id", editTask.id);
-      if (!error) { showSnack("Task updated!"); fetchTasks(); }
-      else showSnack(error.message, "error");
-    } else {
-      const { error } = await supabase.from("tasks").insert(payload);
-      if (!error) { showSnack("Task added!"); fetchTasks(); }
-      else showSnack(error.message, "error");
-    }
-  };
-
-  const toggleComplete = async (task) => {
-    const newStatus = task.status === "completed" ? "pending" : "completed";
-    const { error } = await supabase.from("tasks").update({ status: newStatus }).eq("id", task.id);
-    if (!error) {
-      setTasks(prev => prev.map(t => t.id === task.id ? { ...t, status: newStatus } : t));
-      showSnack(newStatus === "completed" ? "Task completed! 🎉" : "Marked as pending.");
-    }
-  };
-
-  const deleteTask = async (id) => {
-    const { error } = await supabase.from("tasks").delete().eq("id", id);
-    if (!error) { setTasks(prev => prev.filter(t => t.id !== id)); showSnack("Task deleted."); }
-    else showSnack(error.message, "error");
-  };
-
-  const showSnack = (msg, severity = "success") => setSnack({ open: true, msg, severity });
-
-  const filtered = tasks.filter(t => {
-    const matchCat    = activeCategory === "All Tasks" || t.category === activeCategory;
-    const matchSearch = t.title.toLowerCase().includes(search.toLowerCase()) ||
-                        (t.description || "").toLowerCase().includes(search.toLowerCase());
-    return matchCat && matchSearch;
-  });
-
-  const total     = tasks.length;
-  const completed = tasks.filter(t => t.status === "completed").length;
-  const pending   = tasks.filter(t => t.status === "pending").length;
-  const overdue   = tasks.filter(isOverdue).length;
-  const progress  = total ? Math.round((completed / total) * 100) : 0;
-
-  const categoryData = CATEGORIES.filter(c => c !== "All Tasks").map(cat => ({
-    name: cat, value: tasks.filter(t => t.category === cat).length,
-  })).filter(d => d.value > 0);
-
   return (
     <Box sx={{ width: "100%", display: "flex", gap: 3, alignItems: "stretch" }}>
-
-      {/* ── LEFT: Task Panel ── */}
       <Box sx={{ flex: "1 1 0", minWidth: 0 }}>
         <Paper sx={{ p: 3, borderRadius: 3, minHeight: 600, height: "100%", position: "relative" }}>
-
           <Box sx={{ display: "flex", justifyContent: "space-between", alignItems: "center", mb: 2 }}>
             <Typography variant="h5" sx={{ fontWeight: 600, fontFamily: "'Playfair Display', serif" }}>
               Tasks
             </Typography>
+
             <Box sx={{ display: "flex", gap: 1 }}>
               <Tooltip title="Sync Google Classroom">
-                <IconButton onClick={handleClassroomSync} disabled={syncing}
-                  sx={{ border: "1px solid", borderColor: "divider", borderRadius: 2 }}>
-                  <SyncIcon fontSize="small" sx={{
-                    animation: syncing ? "spin 1s linear infinite" : "none",
-                    "@keyframes spin": { "100%": { transform: "rotate(360deg)" } },
-                  }} />
+                <IconButton
+                  onClick={handleClassroomSync}
+                  disabled={syncing}
+                  sx={{ border: "1px solid", borderColor: "divider", borderRadius: 2 }}
+                >
+                  <SyncIcon
+                    fontSize="small"
+                    sx={{
+                      animation: syncing ? "spin 1s linear infinite" : "none",
+                      "@keyframes spin": { "100%": { transform: "rotate(360deg)" } },
+                    }}
+                  />
                 </IconButton>
               </Tooltip>
+
               <Tooltip title="Unsync Classroom tasks">
-                <IconButton onClick={handleClassroomUnsync} disabled={syncing}
-                  sx={{ border: "1px solid", borderColor: "error.light", borderRadius: 2, color: "error.main", "&:hover": { bgcolor: "error.light", color: "#fff" } }}>
+                <IconButton
+                  onClick={handleClassroomUnsync}
+                  disabled={syncing}
+                  sx={{
+                    border: "1px solid",
+                    borderColor: "error.light",
+                    borderRadius: 2,
+                    color: "error.main",
+                    "&:hover": { bgcolor: "error.light", color: "#fff" },
+                  }}
+                >
                   <SyncIcon fontSize="small" sx={{ transform: "scaleX(-1)" }} />
                 </IconButton>
               </Tooltip>
+
               <Tooltip title="Export as PDF">
-                <IconButton onClick={() => setPrintOpen(true)}
-                  sx={{ border: "1px solid", borderColor: "divider", borderRadius: 2 }}>
+                <IconButton
+                  onClick={() => setPrintOpen(true)}
+                  sx={{ border: "1px solid", borderColor: "divider", borderRadius: 2 }}
+                >
                   <PictureAsPdfIcon fontSize="small" />
                 </IconButton>
               </Tooltip>
-              <Button variant="contained" startIcon={<AddIcon />}
-                onClick={() => { setEditTask(null); setModalOpen(true); }}
-                sx={{ borderRadius: 50, px: 2.5 }}>
+
+              <Button
+                variant="contained"
+                startIcon={<AddIcon />}
+                onClick={() => {
+                  setEditTask(null);
+                  setModalOpen(true);
+                }}
+                sx={{ borderRadius: 50, px: 2.5 }}
+              >
                 Add Task
               </Button>
             </Box>
           </Box>
 
           <Box sx={{ display: "flex", gap: 1.5, mb: 2 }}>
-            <TextField fullWidth size="small" placeholder="Search tasks..."
-              value={search} onChange={e => setSearch(e.target.value)}
+            <TextField
+              fullWidth
+              size="small"
+              placeholder="Search tasks..."
+              value={search}
+              onChange={(e) => setSearch(e.target.value)}
               InputProps={{
-                startAdornment: <InputAdornment position="start"><SearchIcon fontSize="small" /></InputAdornment>,
+                startAdornment: (
+                  <InputAdornment position="start">
+                    <SearchIcon fontSize="small" />
+                  </InputAdornment>
+                ),
                 sx: { borderRadius: 50 },
               }}
             />
+
             <Tooltip title="Sort">
-              <IconButton onClick={e => setSortAnchor(e.currentTarget)}
-                sx={{ border: "1px solid", borderColor: "divider", borderRadius: 2 }}>
+              <IconButton
+                onClick={(e) => setSortAnchor(e.currentTarget)}
+                sx={{ border: "1px solid", borderColor: "divider", borderRadius: 2 }}
+              >
                 <SortIcon fontSize="small" />
               </IconButton>
             </Tooltip>
-            <Menu anchorEl={sortAnchor} open={Boolean(sortAnchor)} onClose={() => setSortAnchor(null)}>
+
+            <Menu
+              anchorEl={sortAnchor}
+              open={Boolean(sortAnchor)}
+              onClose={() => setSortAnchor(null)}
+            >
               {[
                 { label: "Date Created", value: "created_at" },
-                { label: "Due Date",     value: "due_date" },
-                { label: "Priority",     value: "priority" },
-                { label: "Title (A-Z)",  value: "title" },
-              ].map(s => (
-                <MenuItem key={s.value} selected={sortBy === s.value}
-                  onClick={() => { setSortBy(s.value); setSortAnchor(null); }}>
+                { label: "Due Date", value: "due_date" },
+                { label: "Priority", value: "priority" },
+                { label: "Title (A-Z)", value: "title" },
+              ].map((s) => (
+                <MenuItem
+                  key={s.value}
+                  selected={sortBy === s.value}
+                  onClick={() => {
+                    setSortBy(s.value);
+                    setSortAnchor(null);
+                  }}
+                >
                   {s.label}
                 </MenuItem>
               ))}
@@ -431,8 +694,10 @@ export default function Tasks() {
           </Box>
 
           <Box sx={{ display: "flex", flexWrap: "wrap", gap: 1, mb: 3 }}>
-            {CATEGORIES.map(cat => (
-              <Chip key={cat} label={cat}
+            {CATEGORIES.map((cat) => (
+              <Chip
+                key={cat}
+                label={cat}
                 onClick={() => setActiveCategory(cat)}
                 variant={activeCategory === cat ? "filled" : "outlined"}
                 color={activeCategory === cat ? "primary" : "default"}
@@ -453,58 +718,114 @@ export default function Tasks() {
             </Box>
           ) : (
             <Box sx={{ display: "flex", flexDirection: "column", gap: 1.5 }}>
-              {filtered.map(task => {
+              {filtered.map((task) => {
                 const done = task.status === "completed";
                 const over = isOverdue(task);
+
                 return (
-                  <Paper key={task.id} variant="outlined" sx={{
-                    p: 2, borderRadius: 2.5,
-                    borderColor: over ? "error.main" : done ? "success.light" : "divider",
-                    opacity: done ? 0.7 : 1, transition: "all 0.2s",
-                    "&:hover": { boxShadow: 2 },
-                  }}>
+                  <Paper
+                    key={task.id}
+                    variant="outlined"
+                    sx={{
+                      p: 2,
+                      borderRadius: 2.5,
+                      borderColor: over ? "error.main" : done ? "success.light" : "divider",
+                      opacity: done ? 0.7 : 1,
+                      transition: "all 0.2s",
+                      "&:hover": { boxShadow: 2 },
+                    }}
+                  >
                     <Box sx={{ display: "flex", alignItems: "flex-start", gap: 1.5 }}>
                       <IconButton size="small" onClick={() => toggleComplete(task)} sx={{ mt: 0.3 }}>
-                        {done
-                          ? <CheckCircleIcon fontSize="small" color="success" />
-                          : <RadioButtonUncheckedIcon fontSize="small" sx={{ color: "text.disabled" }} />}
+                        {done ? (
+                          <CheckCircleIcon fontSize="small" color="success" />
+                        ) : (
+                          <RadioButtonUncheckedIcon fontSize="small" sx={{ color: "text.disabled" }} />
+                        )}
                       </IconButton>
+
                       <Box sx={{ flex: 1, minWidth: 0 }}>
                         <Box sx={{ display: "flex", alignItems: "center", gap: 1, flexWrap: "wrap" }}>
-                          <Typography fontWeight={500} sx={{
-                            textDecoration: done ? "line-through" : "none",
-                            color: done ? "text.disabled" : "text.primary"
-                          }}>
+                          <Typography
+                            fontWeight={500}
+                            sx={{
+                              textDecoration: done ? "line-through" : "none",
+                              color: done ? "text.disabled" : "text.primary",
+                            }}
+                          >
                             {task.title}
                           </Typography>
-                          <Chip label={task.category} size="small" sx={{ borderRadius: 50, fontSize: 11, height: 20 }} />
+
+                          <Chip
+                            label={task.category}
+                            size="small"
+                            sx={{ borderRadius: 50, fontSize: 11, height: 20 }}
+                          />
+
                           {task.synced_from === "classroom" && (
-                            <Chip label="📚 Classroom" size="small"
-                              sx={{ borderRadius: 50, fontSize: 11, height: 20, bgcolor: "#4285F422", color: "#4285F4", fontWeight: 600 }} />
+                            <Chip
+                              label="📚 Classroom"
+                              size="small"
+                              sx={{
+                                borderRadius: 50,
+                                fontSize: 11,
+                                height: 20,
+                                bgcolor: "#4285F422",
+                                color: "#4285F4",
+                                fontWeight: 600,
+                              }}
+                            />
                           )}
-                          <Box sx={{ width: 8, height: 8, borderRadius: "50%", bgcolor: PRIORITY_COLOR[task.priority] || "#999", flexShrink: 0 }} />
-                          {over && <Chip label="Overdue" size="small" color="error" sx={{ borderRadius: 50, fontSize: 11, height: 20 }} />}
+
+                          <Box
+                            sx={{
+                              width: 8,
+                              height: 8,
+                              borderRadius: "50%",
+                              bgcolor: PRIORITY_COLOR[task.priority] || "#999",
+                              flexShrink: 0,
+                            }}
+                          />
+
+                          {over && (
+                            <Chip
+                              label="Overdue"
+                              size="small"
+                              color="error"
+                              sx={{ borderRadius: 50, fontSize: 11, height: 20 }}
+                            />
+                          )}
                         </Box>
+
                         {task.description && (
                           <Typography variant="body2" color="text.secondary" sx={{ mt: 0.3, fontSize: 13 }} noWrap>
                             {task.description}
                           </Typography>
                         )}
+
                         {task.due_date && (
                           <Box sx={{ display: "flex", alignItems: "center", gap: 0.5, mt: 0.5 }}>
                             <CalendarTodayIcon sx={{ fontSize: 12, color: over ? "error.main" : "text.disabled" }} />
                             <Typography variant="caption" color={over ? "error.main" : "text.disabled"}>
-                              {new Date(task.due_date).toLocaleString([], { dateStyle: "medium", timeStyle: "short" })}
+                              {formatTaskDate(task.due_date)}
                             </Typography>
                           </Box>
                         )}
                       </Box>
+
                       <Box sx={{ display: "flex", gap: 0.5, flexShrink: 0 }}>
                         <Tooltip title="Edit">
-                          <IconButton size="small" onClick={() => { setEditTask(task); setModalOpen(true); }}>
+                          <IconButton
+                            size="small"
+                            onClick={() => {
+                              setEditTask(task);
+                              setModalOpen(true);
+                            }}
+                          >
                             <EditIcon fontSize="small" />
                           </IconButton>
                         </Tooltip>
+
                         <Tooltip title="Delete">
                           <IconButton size="small" color="error" onClick={() => deleteTask(task.id)}>
                             <DeleteIcon fontSize="small" />
@@ -518,18 +839,23 @@ export default function Tasks() {
             </Box>
           )}
 
-          {/* Floating + button */}
-          <Box sx={{
-            position: "absolute",
-            bottom: 24,
-            left: "50%",
-            transform: "translateX(-50%)",
-          }}>
+          <Box
+            sx={{
+              position: "absolute",
+              bottom: 24,
+              left: "50%",
+              transform: "translateX(-50%)",
+            }}
+          >
             <Tooltip title="Add Task">
               <IconButton
-                onClick={() => { setEditTask(null); setModalOpen(true); }}
+                onClick={() => {
+                  setEditTask(null);
+                  setModalOpen(true);
+                }}
                 sx={{
-                  width: 48, height: 48,
+                  width: 48,
+                  height: 48,
                   border: "2px solid",
                   borderColor: "primary.main",
                   borderRadius: 2,
@@ -549,17 +875,15 @@ export default function Tasks() {
               </IconButton>
             </Tooltip>
           </Box>
-
         </Paper>
       </Box>
 
-      {/* ── RIGHT: Sidebar ── */}
       <Box sx={{ flex: "0 0 420px", minWidth: 0, display: "flex", flexDirection: "column", gap: 3 }}>
-
         <Paper sx={{ p: 3, borderRadius: 3, minHeight: 280 }}>
           <Typography variant="h6" fontWeight={600} mb={2} sx={{ fontFamily: "'Playfair Display', serif" }}>
             Category Mix
           </Typography>
+
           {categoryData.length === 0 ? (
             <Box sx={{ textAlign: "center", py: 4, color: "text.secondary" }}>
               <CircularProgress variant="determinate" value={0} size={48} sx={{ mb: 1.5, opacity: 0.3 }} />
@@ -569,8 +893,7 @@ export default function Tasks() {
           ) : (
             <ResponsiveContainer width="100%" height={180}>
               <PieChart>
-                <Pie data={categoryData} cx="50%" cy="50%" innerRadius={45} outerRadius={70}
-                  dataKey="value" paddingAngle={3}>
+                <Pie data={categoryData} cx="50%" cy="50%" innerRadius={45} outerRadius={70} dataKey="value" paddingAngle={3}>
                   {categoryData.map((_, i) => (
                     <Cell key={i} fill={CHART_COLORS[i % CHART_COLORS.length]} />
                   ))}
@@ -587,58 +910,89 @@ export default function Tasks() {
             <Typography variant="h6" fontWeight={600} sx={{ fontFamily: "'Playfair Display', serif" }}>
               Progress
             </Typography>
-            <Typography variant="body2" color="text.secondary" fontWeight={500}>{progress}%</Typography>
+
+            <Typography variant="body2" color="text.secondary" fontWeight={500}>
+              {progress}%
+            </Typography>
           </Box>
+
           <LinearProgress variant="determinate" value={progress} sx={{ borderRadius: 50, height: 6, mb: 2.5 }} />
+
           <Grid container spacing={1.5}>
             {[
-              { label: "Total",     value: total,     icon: "📋", color: "primary.main" },
-              { label: "Pending",   value: pending,   icon: "🕐", color: "text.secondary" },
+              { label: "Total", value: total, icon: "📋", color: "primary.main" },
+              { label: "Pending", value: pending, icon: "🕐", color: "text.secondary" },
               { label: "Completed", value: completed, icon: "✅", color: "success.main" },
-              { label: "Overdue",   value: overdue,   icon: "⚠️", color: "error.main" },
-            ].map(stat => (
+              { label: "Overdue", value: overdue, icon: "⚠️", color: "error.main" },
+            ].map((stat) => (
               <Grid item xs={6} key={stat.label}>
                 <Paper variant="outlined" sx={{ p: 1.5, borderRadius: 2, textAlign: "center" }}>
                   <Typography fontSize={20}>{stat.icon}</Typography>
-                  <Typography variant="h6" fontWeight={600} color={stat.color}>{stat.value}</Typography>
-                  <Typography variant="caption" color="text.secondary">{stat.label}</Typography>
+                  <Typography variant="h6" fontWeight={600} color={stat.color}>
+                    {stat.value}
+                  </Typography>
+                  <Typography variant="caption" color="text.secondary">
+                    {stat.label}
+                  </Typography>
                 </Paper>
               </Grid>
             ))}
           </Grid>
+
           <Box sx={{ display: "flex", gap: 1, mt: 2 }}>
             <Button fullWidth variant="outlined" size="small" sx={{ borderRadius: 50 }} component={Link} to="/calendar">
               Open Calendar
             </Button>
+
             <Button fullWidth variant="outlined" size="small" sx={{ borderRadius: 50 }} component={Link} to="/settings">
               Settings
             </Button>
           </Box>
         </Paper>
-
       </Box>
 
-      {/* Print Dialog */}
-      <Dialog open={printOpen} onClose={() => setPrintOpen(false)} maxWidth="xs" fullWidth
-        PaperProps={{ sx: { borderRadius: 3 } }}>
+      <Dialog
+        open={printOpen}
+        onClose={() => setPrintOpen(false)}
+        maxWidth="xs"
+        fullWidth
+        PaperProps={{ sx: { borderRadius: 3 } }}
+      >
         <DialogTitle sx={{ fontWeight: 600, fontFamily: "'Playfair Display', serif" }}>
           Export as PDF
         </DialogTitle>
+
         <DialogContent>
           <Typography variant="body2" color="text.secondary" mb={2}>
             Choose which tasks to include in the report:
           </Typography>
-          <RadioGroup value={printScope} onChange={e => setPrintScope(e.target.value)}>
-            <FormControlLabel value="current" control={<Radio />}
-              label={`Current view — "${activeCategory}"${search ? ` + search "${search}"` : ""} (${filtered.length} tasks)`} />
-            <FormControlLabel value="all" control={<Radio />}
-              label={`All tasks (${tasks.length} tasks)`} />
+
+          <RadioGroup value={printScope} onChange={(e) => setPrintScope(e.target.value)}>
+            <FormControlLabel
+              value="current"
+              control={<Radio />}
+              label={`Current view - "${activeCategory}"${search ? ` + search "${search}"` : ""} (${filtered.length} tasks)`}
+            />
+
+            <FormControlLabel
+              value="all"
+              control={<Radio />}
+              label={`All tasks (${tasks.length} tasks)`}
+            />
           </RadioGroup>
         </DialogContent>
+
         <DialogActions sx={{ px: 3, pb: 3, gap: 1 }}>
-          <Button onClick={() => setPrintOpen(false)} sx={{ borderRadius: 50 }}>Cancel</Button>
-          <Button onClick={handlePrint} variant="contained"
-            startIcon={<PictureAsPdfIcon />} sx={{ borderRadius: 50, px: 3 }}>
+          <Button onClick={() => setPrintOpen(false)} sx={{ borderRadius: 50 }}>
+            Cancel
+          </Button>
+
+          <Button
+            onClick={handlePrint}
+            variant="contained"
+            startIcon={<PictureAsPdfIcon />}
+            sx={{ borderRadius: 50, px: 3 }}
+          >
             Export
           </Button>
         </DialogActions>
@@ -646,16 +1000,25 @@ export default function Tasks() {
 
       <TaskModal
         open={modalOpen}
-        onClose={() => { setModalOpen(false); setEditTask(null); }}
+        onClose={() => {
+          setModalOpen(false);
+          setEditTask(null);
+        }}
         onSave={handleSave}
         editTask={editTask}
       />
 
-      <Snackbar open={snack.open} autoHideDuration={3000}
-        onClose={() => setSnack(s => ({ ...s, open: false }))}
-        anchorOrigin={{ vertical: "bottom", horizontal: "right" }}>
-        <Alert severity={snack.severity} sx={{ borderRadius: 2 }}
-          onClose={() => setSnack(s => ({ ...s, open: false }))}>
+      <Snackbar
+        open={snack.open}
+        autoHideDuration={3000}
+        onClose={() => setSnack((s) => ({ ...s, open: false }))}
+        anchorOrigin={{ vertical: "bottom", horizontal: "right" }}
+      >
+        <Alert
+          severity={snack.severity}
+          sx={{ borderRadius: 2 }}
+          onClose={() => setSnack((s) => ({ ...s, open: false }))}
+        >
           {snack.msg}
         </Alert>
       </Snackbar>
