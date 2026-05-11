@@ -70,7 +70,7 @@ export default function Journal() {
     setSelected(entry);
     setTitle(entry.title || "");
     setContent(entry.content || "");
-    setMood(entry.mood || "");
+    setMood(entry.mood || entry.ai_mood || "");
     setAiText(entry.ai_reflection || "");
   };
 
@@ -80,9 +80,7 @@ export default function Journal() {
     const { data, error } = await supabase.from("journal_entries").insert({
       user_id: user.id,
       title: `Untitled (${count})`,
-      content: "",
-      mood: "",
-      ai_reflection: "",
+      content: "", mood: "", ai_reflection: "", ai_mood: "",
     }).select().single();
     if (!error) {
       await fetchEntries();
@@ -119,17 +117,35 @@ export default function Journal() {
     }
   };
 
-  // ── AI Reflect (placeholder — Flask will handle this later) ────────────
+  // ── AI Reflect via Flask + Groq ────────────────────────────────────────
   const handleReflect = async () => {
     if (!content.trim()) { showSnack("Write something first!", "warning"); return; }
+    if (!selected)       { showSnack("Save the entry first!", "warning");  return; }
     setReflecting(true);
-    // TODO: call Flask /api/journal/reflect endpoint
-    // For now, show a placeholder message
-    setTimeout(() => {
-      setAiText("AI reflection will be available once the Flask backend is connected. Your entry has been noted!");
-      setReflecting(false);
-      showSnack("AI reflection ready!");
-    }, 1500);
+    try {
+      const { data: { session } } = await supabase.auth.getSession();
+      const user_jwt = session?.access_token;
+
+      const res  = await fetch("http://localhost:5000/api/journal/reflect", {
+        method:  "POST",
+        headers: { "Content-Type": "application/json" },
+        body:    JSON.stringify({ entry_id: selected.id, content, user_jwt }),
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || "Reflection failed");
+
+      // Apply AI response
+      setAiText(data.reflection);
+
+      // Auto-select AI suggested mood (user can still override)
+      if (data.mood) setMood(data.mood);
+
+      showSnack("✦ AI reflection ready!", "success");
+      await fetchEntries();
+    } catch (err) {
+      showSnack(err.message, "error");
+    }
+    setReflecting(false);
   };
 
   const filtered = entries.filter(e =>
@@ -345,10 +361,11 @@ export default function Journal() {
             </Box>
             <Box sx={{ display: "flex", gap: 1 }}>
               <Button
-                variant="outlined" startIcon={<AutoAwesomeIcon />}
+                variant="outlined"
+                startIcon={reflecting ? <CircularProgress size={14} color="inherit" /> : <AutoAwesomeIcon />}
                 onClick={handleReflect} disabled={reflecting || !selected}
                 sx={{ borderRadius: 50, px: 2.5 }}>
-                {reflecting ? "Reflecting..." : "Reflect"}
+                {reflecting ? "Reflecting..." : "✦ Reflect"}
               </Button>
               <Button
                 variant="contained" startIcon={<SaveIcon />}
