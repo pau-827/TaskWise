@@ -7,7 +7,6 @@ import { supabase } from "../services/supabase";
 const CLASSROOM_SCOPES = [
   "https://www.googleapis.com/auth/classroom.courses.readonly",
   "https://www.googleapis.com/auth/classroom.coursework.me.readonly",
-  "https://www.googleapis.com/auth/calendar.readonly",
 ].join(" ");
 
 const GoogleIcon = () => (
@@ -33,10 +32,22 @@ export default function LoginPage() {
   const handleLogin = async (e) => {
     e.preventDefault();
     setError(""); setLoading(true);
-    const { error } = await supabase.auth.signInWithPassword({ email, password });
+    const { data, error } = await supabase.auth.signInWithPassword({ email, password });
     setLoading(false);
     if (error) return setError(error.message);
-    navigate("/tasks");
+
+    // Check role — admin goes to /admin/panel, users go to /tasks
+    const { data: profile } = await supabase
+      .from("profiles")
+      .select("role")
+      .eq("id", data.user.id)
+      .single();
+
+    if (profile?.role === "admin") {
+      navigate("/admin/panel");
+    } else {
+      navigate("/tasks");
+    }
   };
 
   const handleGoogleLogin = async () => {
