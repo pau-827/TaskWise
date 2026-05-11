@@ -578,15 +578,22 @@ export default function Tasks() {
   };
 
   return (
-    <Box sx={{ width: "100%", display: "flex", gap: 3, alignItems: "stretch" }}>
-      <Box sx={{ flex: "1 1 0", minWidth: 0 }}>
-        <Paper sx={{ p: 3, borderRadius: 3, minHeight: 600, height: "100%", position: "relative" }}>
+<Box
+  sx={{
+    width: "100%",
+    display: "flex",
+    flexDirection: { xs: "column", lg: "row" },
+    gap: { xs: 2, md: 3 },
+    alignItems: "stretch",
+  }}
+>      <Box sx={{ flex: "1 1 0", minWidth: 0, width: "100%" }}>
+        <Paper sx={{ p: 3, borderRadius: 3, height: "calc(100vh - 140px)", position: "relative", display: "flex", flexDirection: "column", overflow: "hidden" }}>
           <Box sx={{ display: "flex", justifyContent: "space-between", alignItems: "center", mb: 2 }}>
             <Typography variant="h5" sx={{ fontWeight: 600, fontFamily: "'Playfair Display', serif" }}>
               Tasks
             </Typography>
 
-            <Box sx={{ display: "flex", gap: 1 }}>
+            <Box sx={{ display: "flex", gap: 1, flexWrap: "wrap", justifyContent: "flex-end" }}>
               <Tooltip title="Sync Google Classroom">
                 <IconButton
                   onClick={handleClassroomSync}
@@ -717,7 +724,7 @@ export default function Tasks() {
               <Typography variant="body2" mt={0.5}>Add one using the button above.</Typography>
             </Box>
           ) : (
-            <Box sx={{ display: "flex", flexDirection: "column", gap: 1.5 }}>
+            <Box sx={{ display: "flex", flexDirection: "column", gap: 1.5, overflowY: "auto", pr: 1, pb: 8, maxHeight: "100%", "&::-webkit-scrollbar": { width: 8 }, "&::-webkit-scrollbar-track": { background: "rgba(0,0,0,0.04)", borderRadius: 10 }, "&::-webkit-scrollbar-thumb": { background: "rgba(255,79,139,0.45)", borderRadius: 10 }, "&::-webkit-scrollbar-thumb:hover": { background: "rgba(255,79,139,0.7)" } }}>
               {filtered.map((task) => {
                 const done = task.status === "completed";
                 const over = isOverdue(task);
@@ -878,8 +885,16 @@ export default function Tasks() {
         </Paper>
       </Box>
 
-      <Box sx={{ flex: "0 0 420px", minWidth: 0, display: "flex", flexDirection: "column", gap: 3 }}>
-        <Paper sx={{ p: 3, borderRadius: 3, minHeight: 280 }}>
+<Box
+  sx={{
+    width: { xs: "100%", lg: 420 },
+    flex: { xs: "1 1 auto", lg: "0 0 420px" },
+    minWidth: 0,
+    display: "flex",
+    flexDirection: { xs: "column", md: "row", lg: "column" },
+    gap: { xs: 2, md: 3 },
+  }}
+>        <Paper sx={{ p: 3, borderRadius: 3, minHeight: 280 }}>
           <Typography variant="h6" fontWeight={600} mb={2} sx={{ fontFamily: "'Playfair Display', serif" }}>
             Category Mix
           </Typography>
@@ -905,7 +920,18 @@ export default function Tasks() {
           )}
         </Paper>
 
-        <Paper sx={{ p: 3, borderRadius: 3, flexGrow: 1 }}>
+        <Paper
+          sx={{
+            p: 3,
+            borderRadius: 4,
+            flexGrow: 1,
+            background:
+              "linear-gradient(180deg, rgba(255,255,255,0.95) 0%, rgba(255,248,250,0.98) 100%)",
+            boxShadow: "0 8px 24px rgba(0,0,0,0.06)",
+            border: "1px solid rgba(255,255,255,0.5)",
+            backdropFilter: "blur(10px)",
+          }}
+        >
           <Box sx={{ display: "flex", justifyContent: "space-between", alignItems: "center", mb: 1.5 }}>
             <Typography variant="h6" fontWeight={600} sx={{ fontFamily: "'Playfair Display', serif" }}>
               Progress
@@ -916,9 +942,22 @@ export default function Tasks() {
             </Typography>
           </Box>
 
-          <LinearProgress variant="determinate" value={progress} sx={{ borderRadius: 50, height: 6, mb: 2.5 }} />
+          <LinearProgress
+              variant="determinate"
+              value={progress}
+              sx={{
+                borderRadius: 999,
+                height: 10,
+                mb: 3,
+                bgcolor: "rgba(0,0,0,0.06)",
+                "& .MuiLinearProgress-bar": {
+                  borderRadius: 999,
+                  background: "linear-gradient(90deg, #ff4f8b, #ff7eb3)",
+                },
+              }}
+            />
 
-          <Grid container spacing={1.5}>
+          <Grid container spacing={2}>
             {[
               { label: "Total", value: total, icon: "📋", color: "primary.main" },
               { label: "Pending", value: pending, icon: "🕐", color: "text.secondary" },
@@ -926,7 +965,19 @@ export default function Tasks() {
               { label: "Overdue", value: overdue, icon: "⚠️", color: "error.main" },
             ].map((stat) => (
               <Grid item xs={6} key={stat.label}>
-                <Paper variant="outlined" sx={{ p: 1.5, borderRadius: 2, textAlign: "center" }}>
+                <Paper variant="outlined" sx={{
+                    p: 2,
+                    borderRadius: 3,
+                    textAlign: "center",
+                    transition: "all 0.2s ease",
+                    cursor: "default",
+                    bgcolor: "background.paper",
+                    "&:hover": {
+                      transform: "translateY(-4px)",
+                      boxShadow: 4,
+                    },
+                  }}
+                >
                   <Typography fontSize={20}>{stat.icon}</Typography>
                   <Typography variant="h6" fontWeight={600} color={stat.color}>
                     {stat.value}
