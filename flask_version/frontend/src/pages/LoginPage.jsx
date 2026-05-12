@@ -32,33 +32,17 @@ export default function LoginPage() {
   const handleLogin = async (e) => {
     e.preventDefault();
     setError(""); setLoading(true);
-    const { data, error } = await supabase.auth.signInWithPassword({ email, password });
+    const { error } = await supabase.auth.signInWithPassword({ email, password });
     setLoading(false);
     if (error) return setError(error.message);
-
-    // Check role — admin goes to /admin/panel, users go to /tasks
-    try {
-      const { data: profile } = await supabase
-        .from("profiles")
-        .select("role")
-        .eq("id", data.user.id)
-        .maybeSingle();
-
-      if (profile?.role === "admin") {
-        navigate("/admin/panel");
-      } else {
-        navigate("/tasks");
-      }
-    } catch {
-      navigate("/tasks");
-    }
+    navigate("/tasks");
   };
 
   const handleGoogleLogin = async () => {
     const { error } = await supabase.auth.signInWithOAuth({
       provider: "google",
       options: {
-        redirectTo: `${window.location.origin}/auth/callback`,
+        redirectTo: `${window.location.origin}/tasks`,
         scopes: CLASSROOM_SCOPES,
         queryParams: { access_type: "offline", prompt: "consent" },
       },

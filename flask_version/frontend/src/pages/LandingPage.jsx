@@ -135,7 +135,7 @@ export default function LandingPage() {
             letterSpacing: "-0.5px", transition: "color 0.4s ease",
           }}>
             Plan Your Day<br />
-            <span style={{ color: c.headingAccent, transition: "color 0.4s ease" }}>with TaskWise</span>
+            <span style={{ color: c.headingAccent, transition: "color 0.4s ease" }}>With Clarity</span>
           </h1>
 
           <p style={{
@@ -302,10 +302,23 @@ export default function LandingPage() {
       {/* Footer */}
       <footer style={{
         borderTop: `1px solid ${c.cardBorder}`, padding: "20px 2.5rem",
-        textAlign: "center", fontSize: 12, color: c.mutedText,
+        display: "flex", justifyContent: "space-between", alignItems: "center",
         transition: "border-color 0.4s ease, color 0.4s ease",
       }}>
-        TaskWise keeps your day clear and organized.
+        <span style={{ fontSize: 12, color: c.mutedText }}>
+          TaskWise keeps your day clear and organized.
+        </span>
+        <a
+          href="/admin"
+          style={{
+            fontSize: 11, color: c.mutedText, textDecoration: "none",
+            opacity: 0.4, transition: "opacity 0.2s",
+          }}
+          onMouseEnter={e => { e.currentTarget.style.opacity = "1"; }}
+          onMouseLeave={e => { e.currentTarget.style.opacity = "0.4"; }}
+        >
+          ✦ for the team
+        </a>
       </footer>
     </div>
   );
