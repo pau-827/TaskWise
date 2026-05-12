@@ -37,15 +37,19 @@ export default function LoginPage() {
     if (error) return setError(error.message);
 
     // Check role — admin goes to /admin/panel, users go to /tasks
-    const { data: profile } = await supabase
-      .from("profiles")
-      .select("role")
-      .eq("id", data.user.id)
-      .single();
+    try {
+      const { data: profile } = await supabase
+        .from("profiles")
+        .select("role")
+        .eq("id", data.user.id)
+        .maybeSingle();
 
-    if (profile?.role === "admin") {
-      navigate("/admin/panel");
-    } else {
+      if (profile?.role === "admin") {
+        navigate("/admin/panel");
+      } else {
+        navigate("/tasks");
+      }
+    } catch {
       navigate("/tasks");
     }
   };
@@ -54,7 +58,7 @@ export default function LoginPage() {
     const { error } = await supabase.auth.signInWithOAuth({
       provider: "google",
       options: {
-        redirectTo: `${window.location.origin}/tasks`,
+        redirectTo: `${window.location.origin}/auth/callback`,
         scopes: CLASSROOM_SCOPES,
         queryParams: { access_type: "offline", prompt: "consent" },
       },
