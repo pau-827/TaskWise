@@ -179,7 +179,7 @@ export default function LandingPage() {
             >
               Create Account
             </button>
-            <button
+            <button onClick={() => navigate("/contact-admin")}
               style={{
                 padding: "12px 30px", borderRadius: 50,
                 border: `1.5px solid ${c.accent}`, background: "transparent",

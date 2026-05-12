@@ -19,6 +19,7 @@ import Recipes       from "./pages/Recipes";
 import AdminLogin    from "./admin/AdminLogin";
 import AdminPanel    from "./admin/AdminPanel";
 import AdminRoute    from "./admin/AdminRoute";
+import ContactAdmin from "./pages/ContactAdmin";
 
 // Handles admin Google OAuth redirect
 function AdminCallback() {
@@ -86,7 +87,7 @@ function App() {
         <Route path="/"       element={<LandingPage />} />
         <Route path="/login"  element={<LoginPage />} />
         <Route path="/signup" element={<SignupPage />} />
-
+        <Route path="/contact-admin" element={<ContactAdmin />} />
         {/* Admin routes */}
         <Route path="/whoops"              element={<Whoops />} />
         <Route path="/admin"               element={<AdminLogin />} />

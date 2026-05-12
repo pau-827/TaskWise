@@ -1,4 +1,4 @@
-import { useState, useContext } from "react";
+import { useState, useContext, useRef, useEffect } from "react";
 import {
   Box, Paper, Typography, Avatar, Select, MenuItem,
   IconButton, Dialog, DialogTitle, DialogContent, DialogActions,
@@ -42,6 +42,31 @@ export default function Settings() {
   const email = user?.email || "";
   const initials = displayName.slice(0, 2).toUpperCase();
 
+  const fileInputRef = useRef(null);
+  const [profileImage, setProfileImage] = useState("");
+  const [pendingProfileImage, setPendingProfileImage] = useState("");
+  const [imagePreviewOpen, setImagePreviewOpen] = useState(false);
+
+  useEffect(() => {
+    if (!user?.id) return;
+
+    const savedImage = localStorage.getItem(`profile_image_${user.id}`);
+    if (savedImage) setProfileImage(savedImage);
+  }, [user]);
+
+  const handleProfileImageUpload = (event) => {
+    const file = event.target.files[0];
+    if (!file || !user?.id) return;
+
+    const reader = new FileReader();
+
+    reader.onloadend = () => {
+      setPendingProfileImage(reader.result);
+    };
+
+    reader.readAsDataURL(file);
+  };
+
   const [profileOpen, setProfileOpen] = useState(false);
   const [passwordOpen, setPasswordOpen] = useState(false);
   const [deleteOpen, setDeleteOpen] = useState(false);
@@ -75,6 +100,9 @@ export default function Settings() {
   const handleUpdateName = async () => {
     if (!newName.trim()) {
       setNameError("Name cannot be empty.");
+      setNameSuccess("Profile updated!");
+      showSnack("Profile updated.");
+      setProfileOpen(false);
       return;
     }
 
@@ -88,7 +116,13 @@ export default function Settings() {
     if (error) {
       setNameError(error.message);
     } else {
-      setNameSuccess("Display name updated!");
+      if (pendingProfileImage) {
+        setProfileImage(pendingProfileImage);
+        localStorage.setItem(`profile_image_${user.id}`, pendingProfileImage);
+        setPendingProfileImage("");
+      }
+
+      setNameSuccess("Profile updated!");
       showSnack("Profile updated.");
       setTimeout(() => setProfileOpen(false), 1000);
     }
@@ -249,8 +283,20 @@ export default function Settings() {
           >
             <Box sx={{ position: "absolute", right: -35, top: -35, width: 120, height: 120, borderRadius: "50%", bgcolor: primary + "22" }} />
 
-            <Avatar sx={{ width: 64, height: 64, bgcolor: primary, fontSize: 22, fontWeight: 800, boxShadow: `0 0 20px ${primary}55` }}>
-              {initials}
+            <Avatar
+              src={profileImage}
+              onClick={() => profileImage && setImagePreviewOpen(true)}
+              sx={{
+                width: 64,
+                height: 64,
+                bgcolor: primary,
+                fontSize: 22,
+                fontWeight: 800,
+                boxShadow: `0 0 20px ${primary}55`,
+                cursor: profileImage ? "pointer" : "default",
+              }}
+            >
+              {!profileImage && initials}
             </Avatar>
 
             <Box sx={{ flex: 1, position: "relative", zIndex: 1 }}>
@@ -325,7 +371,18 @@ export default function Settings() {
           </Typography>
 
           <Box sx={{ display: "flex", flexDirection: "column", gap: 1.5, mb: 3 }}>
-            <SettingRow icon={<AccountCircleIcon />} title="Account" subtitle="View and edit profile information" onClick={() => { setNewName(displayName); setNameError(""); setNameSuccess(""); setProfileOpen(true); }} />
+            <SettingRow
+              icon={<AccountCircleIcon />}
+              title="Account"
+              subtitle="View and edit profile information"
+              onClick={() => {
+                setNewName(displayName);
+                setPendingProfileImage("");
+                setNameError("");
+                setNameSuccess("");
+                setProfileOpen(true);
+              }}
+            />
             <SettingRow icon={<LockIcon />} title="Change Password" subtitle="Update your account password" onClick={() => { setNewPass(""); setConfirmPass(""); setPassError(""); setPassSuccess(""); setPasswordOpen(true); }} />
             <SettingRow icon={<DeleteIcon />} title="Delete Account" subtitle="Permanently delete your account and data" onClick={() => { setDeleteConfirm(""); setDeleteError(""); setDeleteOpen(true); }} danger />
           </Box>
@@ -388,19 +445,69 @@ export default function Settings() {
         <DialogTitle sx={{ fontWeight: 800, fontFamily: "'Playfair Display', serif" }}>Edit Profile</DialogTitle>
         <DialogContent sx={{ display: "flex", flexDirection: "column", gap: 2, pt: "12px !important" }}>
           <Box sx={{ display: "flex", flexDirection: "column", alignItems: "center", gap: 1, mb: 1 }}>
-            <Avatar sx={{ width: 70, height: 70, bgcolor: primary, fontSize: 24, fontWeight: 800 }}>{initials}</Avatar>
+            <Avatar
+              src={pendingProfileImage || profileImage}
+              onClick={() => fileInputRef.current?.click()}
+              sx={{
+                width: 70,
+                height: 70,
+                bgcolor: primary,
+                fontSize: 24,
+                fontWeight: 800,
+                cursor: "pointer",
+                border: `3px solid ${primary}`,
+                "&:hover": { opacity: 0.85 },
+              }}
+            >
+              {!pendingProfileImage && !profileImage && initials}
+            </Avatar>
+
+            <input
+              ref={fileInputRef}
+              type="file"
+              accept="image/*"
+              style={{ display: "none" }}
+              onChange={handleProfileImageUpload}
+            />
+
+            <Typography variant="caption" color={textMuted}>
+              Click the circle to choose a profile photo
+            </Typography>
+
             <Typography variant="caption" color={textMuted}>{email}</Typography>
           </Box>
+
           {nameError && <Alert severity="error" sx={{ borderRadius: 2 }}>{nameError}</Alert>}
           {nameSuccess && <Alert severity="success" sx={{ borderRadius: 2 }}>{nameSuccess}</Alert>}
           <TextField label="Display Name" fullWidth value={newName} onChange={(e) => setNewName(e.target.value)} sx={{ "& .MuiOutlinedInput-root": { borderRadius: 3 } }} />
         </DialogContent>
         <DialogActions sx={{ px: 3, pb: 3, gap: 1 }}>
-          <Button onClick={() => setProfileOpen(false)} sx={{ borderRadius: 50 }}>Cancel</Button>
+          <Button onClick={() => { setPendingProfileImage(""); setProfileOpen(false); }} sx={{ borderRadius: 50 }}>Cancel</Button>
           <Button onClick={handleUpdateName} variant="contained" disabled={nameLoading} sx={{ borderRadius: 50, px: 3 }}>
             {nameLoading ? <CircularProgress size={18} color="inherit" /> : "Save"}
           </Button>
         </DialogActions>
+      </Dialog>
+
+      <Dialog
+        open={imagePreviewOpen}
+        onClose={() => setImagePreviewOpen(false)}
+        maxWidth="sm"
+        fullWidth
+        PaperProps={{ sx: { borderRadius: 4, bgcolor: "transparent", boxShadow: "none" } }}
+      >
+        <Box
+          component="img"
+          src={profileImage}
+          alt="Profile Preview"
+          sx={{
+            width: "100%",
+            maxHeight: "80vh",
+            objectFit: "contain",
+            borderRadius: 4,
+            bgcolor: "background.paper",
+          }}
+        />
       </Dialog>
 
       <Dialog open={passwordOpen} onClose={() => setPasswordOpen(false)} maxWidth="xs" fullWidth PaperProps={{ sx: { borderRadius: 4 } }}>

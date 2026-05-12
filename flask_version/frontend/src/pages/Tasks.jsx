@@ -334,49 +334,28 @@ export default function Tasks() {
   };
 
   useEffect(() => {
-    if (!user?.id) return;
-    if (!("Notification" in window)) return;
-
-    const requestPermission = async () => {
-      if (Notification.permission === "default") {
-        const permission = await Notification.requestPermission();
-        setNotificationEnabled(permission === "granted");
-      }
-
-      if (Notification.permission === "granted") {
-        setNotificationEnabled(true);
-      }
-    };
-
-    requestPermission();
-
-    const storageKey = getNotificationKey(user.id);
+    if (!user?.id || !notificationEnabled || !("Notification" in window)) return;
+    if (Notification.permission !== "granted") return;
 
     const checkDueTasks = () => {
-      if (Notification.permission !== "granted") return;
-
+      const storageKey = getNotificationKey(user.id);
       const notified = JSON.parse(localStorage.getItem(storageKey) || "{}");
-      const now = new Date().getTime();
-      const twentyFourHours = 24 * 60 * 60 * 1000;
 
       tasks.forEach((task) => {
-        if (!task.due_date) return;
-        if (task.status === "completed") return;
+        const notifyId = `${task.id}_${task.due_date}`;
 
-        const dueTime = new Date(task.due_date).getTime();
-        const diff = dueTime - now;
-        const notificationId = `${task.id}_${task.due_date}`;
+        if (notified[notifyId]) return;
+        if (!canNotifyTask(task)) return;
 
-        if (diff > 0 && diff <= twentyFourHours && !notified[notificationId]) {
-          new Notification("⏰ Task Due Soon", {
-            body: `"${task.title}" is due within 24 hours.`,
-            icon: "/favicon.svg",
-          });
+        new Notification("TaskWise Reminder", {
+          body: `"${task.title}" is due within 24 hours.`,
+          icon: "/favicon.svg",
+        });
 
-          notified[notificationId] = true;
-          localStorage.setItem(storageKey, JSON.stringify(notified));
-        }
+        notified[notifyId] = true;
       });
+
+      localStorage.setItem(storageKey, JSON.stringify(notified));
     };
 
     checkDueTasks();
@@ -384,7 +363,7 @@ export default function Tasks() {
     const interval = setInterval(checkDueTasks, 60 * 1000);
 
     return () => clearInterval(interval);
-  }, [tasks, user]);
+  }, [tasks, user, notificationEnabled]);
 
   const handleClassroomSync = async () => {
     setSyncing(true);
