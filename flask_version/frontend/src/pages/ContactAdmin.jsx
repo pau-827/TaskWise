@@ -38,7 +38,7 @@ export default function ContactAdmin() {
     >
       <Button
         startIcon={<ArrowBackIcon />}
-        onClick={() => navigate("/")}
+        onClick={() => navigate(-1)}
         sx={{ mb: 3, borderRadius: 50 }}
       >
         Back

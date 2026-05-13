@@ -19,6 +19,8 @@ import AdminLogin    from "./admin/AdminLogin";
 import AdminPanel    from "./admin/AdminPanel";
 import AdminRoute    from "./admin/AdminRoute";
 
+import ContactAdmin from "./pages/ContactAdmin";
+
 function Whoops() {
   return (
     <Box sx={{ minHeight: "100vh", display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", gap: 2, bgcolor: "#f0f7f5", fontFamily: "'DM Sans', sans-serif" }}>
@@ -70,6 +72,9 @@ function App() {
           <Route path="/recipes"  element={<Recipes />} />
           <Route path="/settings" element={<Settings />} />
         </Route>
+
+        {/* ContactAdmin route */}
+        <Route path="/contact-admin" element={<ContactAdmin />} />
 
         <Route path="*" element={<Navigate to="/" />} />
       </Routes>
