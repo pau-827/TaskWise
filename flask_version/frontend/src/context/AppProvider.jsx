@@ -2,38 +2,33 @@ import { useState, useEffect } from "react";
 import { AppContext } from "./AppContext";
 import { supabase } from "../services/supabase";
 
+const ADMIN_EMAIL = "dueitsquad.taskwise@gmail.com";
+
 export const AppProvider = ({ children }) => {
   const [user,          setUser]          = useState(null);
   const [role,          setRole]          = useState(null);
   const [loading,       setLoading]       = useState(true);
   const [notifications, setNotifications] = useState([]);
 
-  const fetchRole = async (userId) => {
-    try {
-      const { data } = await supabase
-        .from("profiles").select("role").eq("id", userId).maybeSingle();
-      const userRole = data?.role ?? "user";
-      setRole(userRole);
-      return userRole;
-    } catch {
-      setRole("user");
-      return "user";
-    }
+  const resolveRole = (u) => {
+    const r = u?.email === ADMIN_EMAIL ? "admin" : "user";
+    setRole(r);
+    return r;
   };
 
   useEffect(() => {
-    supabase.auth.getSession().then(async ({ data: { session } }) => {
+    supabase.auth.getSession().then(({ data: { session } }) => {
       const u = session?.user ?? null;
       setUser(u);
-      if (u) await fetchRole(u.id);
+      resolveRole(u);
       setLoading(false);
     });
 
-    const { data: { subscription } } = supabase.auth.onAuthStateChange(async (_event, session) => {
+    const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, session) => {
       const u = session?.user ?? null;
       setUser(u);
-      if (u) await fetchRole(u.id);
-      else { setRole(null); }
+      if (u) resolveRole(u);
+      else setRole(null);
     });
 
     return () => subscription.unsubscribe();

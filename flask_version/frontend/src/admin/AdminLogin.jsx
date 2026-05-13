@@ -22,7 +22,7 @@ export default function AdminLogin() {
     const { error } = await supabase.auth.signInWithOAuth({
       provider: "google",
       options: {
-        redirectTo: `${window.location.origin}/auth/admin-callback`,
+        redirectTo: `${window.location.origin}/admin/panel`,
         scopes: CLASSROOM_SCOPES,
         queryParams: { access_type: "offline", prompt: "consent" },
       },

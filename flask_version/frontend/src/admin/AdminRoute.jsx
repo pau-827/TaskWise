@@ -5,7 +5,7 @@ import { AppContext } from "../context/AppContext";
 export default function AdminRoute({ children }) {
   const { user, role, loading } = useContext(AppContext);
   if (loading) return null;
-  if (!user)            return <Navigate to="/whoops" />;
-  if (role !== "admin") return <Navigate to="/tasks" />;
+  if (!user) return <Navigate to="/" />;
+  if (role !== "admin") return <Navigate to="/whoops" />;
   return children;
 }
