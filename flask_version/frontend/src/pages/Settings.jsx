@@ -18,6 +18,8 @@ import { ThemeContext } from "../context/ThemeContext";
 import { THEMES } from "../theme/themes";
 import { supabase } from "../services/supabase";
 
+import emailjs from "@emailjs/browser";
+
 const THEME_OPTIONS = [
   { value: "light", label: "Light Mode", color: "#E3F4F4" },
   { value: "dark",  label: "Dark Mode",  color: "#1f2937" },
@@ -136,8 +138,6 @@ export default function Settings() {
   const handleUpdateName = async () => {
     if (!newName.trim()) {
       setNameError("Name cannot be empty.");
-      setNameSuccess("Profile updated!");
-      showSnack("Profile updated.");
       setProfileOpen(false);
       return;
     }
@@ -185,20 +185,111 @@ export default function Settings() {
     navigate("/");
   };
 
-  const handleReportIssue = async () => {
+    const handleReportIssue = async () => {
     if (!issueTitle.trim() || !issueDescription.trim()) {
-      showSnack("Please complete the issue title and description.", "warning"); return;
+      showSnack(
+        "Please complete the issue title and description.",
+        "warning"
+      );
+      return;
     }
+
     setIssueLoading(true);
-    const { error } = await supabase.from("issue_reports").insert({
-      user_id: user?.id, email, issue_type: issueType,
-      title: issueTitle.trim(), description: issueDescription.trim(),
-      status: "open", created_at: new Date().toISOString(),
-    });
-    if (error) showSnack("Issue report saved locally only. Check if issue_reports table exists.", "warning");
-    else showSnack("Issue report submitted.");
-    setIssueTitle(""); setIssueDescription(""); setIssueType("UI Issue");
-    setReportOpen(false); setIssueLoading(false);
+
+    try {
+      // Debug log
+      console.log("Submitting issue report:", {
+        user_id: user?.id,
+        email,
+        issue_type: issueType,
+        title: issueTitle.trim(),
+        description: issueDescription.trim(),
+      });
+
+      // Save to Supabase FIRST
+      const { error } = await supabase
+        .from("issue_reports")
+        .insert([
+          {
+            user_id: user?.id,
+            email: email || "Unknown",
+            issue_type: issueType,
+            title: issueTitle.trim(),
+            description: issueDescription.trim(),
+            status: "open",
+            created_at: new Date().toISOString(),
+          },
+        ]);
+
+      // STOP if database insert failed
+      if (error) {
+        console.error("Supabase insert error:", error);
+
+        showSnack(
+          `Could not save report: ${error.message}`,
+          "error"
+        );
+
+        setIssueLoading(false);
+        return;
+      }
+
+      // Send EmailJS only AFTER successful save
+      try {
+        await emailjs.send(
+          "service_zocrlih",
+          "template_yasnbqg",
+          {
+            from_name: displayName || "Unknown User",
+            from_email: email || "Unknown",
+
+            issue_type: issueType,
+
+            issue_title: issueTitle.trim(),
+
+            issue_description: issueDescription.trim(),
+
+            submitted_at: new Date().toLocaleString(),
+          },
+          "rtNoNBerdz5-jrmmJ"
+        );
+
+        showSnack(
+          "Issue report submitted and emailed successfully! ✅",
+          "success"
+        );
+      } catch (emailError) {
+      console.error("EmailJS FULL error:", {
+        text: emailError?.text,
+        status: emailError?.status,
+        message: emailError?.message,
+      });
+
+        // Report saved but email failed
+        showSnack(
+          "Report saved, but email failed to send.",
+          "warning"
+        );
+      }
+
+      // Reset form
+      setIssueTitle("");
+      setIssueDescription("");
+      setIssueType("UI Issue");
+
+      // Close dialog
+      setReportOpen(false);
+
+    } catch (err) {
+      console.error("Unexpected error:", err);
+
+      showSnack(
+        "Unexpected error while submitting report.",
+        "error"
+      );
+    } finally {
+      setIssueLoading(false);
+    }
   };
 
   return (
