@@ -22,7 +22,6 @@ Date: **October 9, 2025**
 - Data Model (ERD Summary + Table Fields)
 - Chosen Framework (Flet)
 - Setup & Run Instructions (Dependencies + platform targets)
-- Testing Summary (How to run tests)
 - Team Roles & Contribution Matrix (Template included)
 - Risk / Constraint Notes & Future Enhancements
 - Individual Reflection (Template included)
@@ -264,34 +263,34 @@ flet run main.py
 ### Screenshot of our Interface
 #### Admin View
 - Front Page
-![alt text](assets/front_page.png)
+![alt text](assets/screenshots/front_page.png)
 
 **Admnin View**
 - Screenshots of the admin side of TaskWise where the admin can manage users (view, ban/unban, delete) and review system logs.
-![alt text](assets/admin1.png)
-![alt text](assets/admin2.png)
+![alt text](assets/screenshots/admin1.png)
+![alt text](assets/screenshots/admin2.png)
 
 **User View**
 - Screenshots of the user side of TaskWise where users can create, edit, delete, search, categorize, and complete tasks, plus view tasks on the calendar and manage settings.
-![alt text](assets/signin.png)
-![alt text](assets/login.png)
+![alt text](assets/screenshots/signin.png)
+![alt text](assets/screenshots/login.png)
 **Task Page**
-![alt text](assets/taskpage.png)
+![alt text](assets/screenshots/taskpage.png)
 **Calendar Page**
-![alt text](assets/calendar.png)
+![alt text](assets/screenshots/calendar.png)
 **Settings Page**
-![alt text](assets/settings.png)
+![alt text](assets/screenshots/settings.png)
 
 Screenshots showing TaskWise themes (Light Mode, Dark Mode, and Pink) so users can see how the app looks and feels in each style.
 
 **Light Mode**
-![alt text](assets/taskpage.png)
+![alt text](assets/screenshots/taskpage.png)
 
 **Dark Mode**
-![alt text](assets/darkmode.png)
+![alt text](assets/screenshots/darkmode.png)
 
 **Pink Mode**
-![alt text](assets/pinkmode.png)
+![alt text](assets/screenshots/pinkmode.png)
 ---
 
 ## 9) Due Date/Time Format (Important)
@@ -319,15 +318,7 @@ It does not show:
 
 ---
 
-## 11) Testing Summary
-
-### Where tests are located
-- `taskwise/pages/test_task_page.py`
-- `taskwise/pages/test_calendar_page.py`
-- `taskwise/pages/test_settings_page.py`
-
-
-## 12) GitHub Workflow (Commit Properly)
+## 11) GitHub Workflow (Commit Properly)
 
 ### Check status
 ```bash
@@ -355,7 +346,7 @@ git commit -m "Fix due time format and 24-hour notification parsing"
 git push origin main
 ```
 
-## 13) Team Roles & Contribution Matrix (Fill This In)
+## 12) Team Roles & Contribution Matrix (Fill This In)
 
 | Member | Role | Main Contributions |
 |--------|------|-------------------|
@@ -365,7 +356,7 @@ git push origin main
 
 ---
 
-## 14) Risks / Constraints & Future Enhancements
+## 13) Risks / Constraints & Future Enhancements
 
 ### Constraints
 - Must work on major browsers (if deployed for web)
@@ -385,7 +376,7 @@ git push origin main
 
 ---
 
-## 15) Individual Reflection (Template: 150–200 words each)
+## 14) Individual Reflection (Template: 150–200 words each)
 
 **Muit, Ivy Pauline B.**  
 For this project, I mostly worked on the backend and database. I am the one responsible fororganizing the project's structure and compiling of the simultaneous changes of the group. The admin role and the isolation of user data was also applied by me. Additionally, I also worked on the security layer of our project by adding secret configuration to the admin's email and password. One of the challenges I faced is when I was fixing the data storage per user account as we initially have two databases and the changes a user did wasn't saved to the global one. Hence, I had to choose only one database file and merged the other one with it. Another challenge I faced is about the navigation of each pages when I first restructured and separated the draft code into different files to ensure a modular structure. Overall, what I learned from all of this is that having a great team makes work a lot easier, especially when each one of us has their own designated role but still willing to any pending task outside of their role to help lessen the workload. What I want to improve, or rather add, next time is maybe the user inactivy detetion that I wasn't able to finish applying. And maybe more features like a journal page where the user can document their day, because personally, I love journaling.
